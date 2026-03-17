@@ -1,0 +1,1367 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Footage Manager</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface2: #22263a;
+      --border: #2e3348;
+      --accent: #6c63ff;
+      --accent2: #a78bfa;
+      --text: #e2e8f0;
+      --muted: #64748b;
+      --tag-place: #1e40af;
+      --tag-weather: #0e7490;
+      --tag-time: #92400e;
+      --tag-person: #3f3f46;
+      --tag-custom: #4c1d95;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      min-height: 100vh;
+    }
+
+    /* ─── Header ─── */
+    .site-header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .site-header h1 {
+      font-size: 1.1rem;
+      font-weight: 700;
+      margin: 0;
+      letter-spacing: .02em;
+      color: var(--text);
+    }
+    .badge-count {
+      background: var(--surface2);
+      color: var(--muted);
+      font-size: .75rem;
+      padding: 2px 8px;
+      border-radius: 99px;
+      border: 1px solid var(--border);
+    }
+
+    /* ─── Toolbar ─── */
+    .toolbar {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 24px;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: flex-end;
+    }
+    .toolbar label {
+      font-size: .72rem;
+      color: var(--muted);
+      letter-spacing: .05em;
+      text-transform: uppercase;
+      display: block;
+      margin-bottom: 4px;
+    }
+    .toolbar input, .toolbar select {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 6px;
+      padding: 6px 10px;
+      font-size: .85rem;
+      outline: none;
+      transition: border-color .15s;
+    }
+    .toolbar input:focus, .toolbar select:focus {
+      border-color: var(--accent);
+    }
+    .toolbar input::placeholder { color: var(--muted); }
+    .btn-accent {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      padding: 7px 16px;
+      font-size: .85rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity .15s;
+    }
+    .btn-accent:hover { opacity: .85; }
+    .btn-ghost {
+      background: transparent;
+      color: var(--muted);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 7px 14px;
+      font-size: .85rem;
+      cursor: pointer;
+      text-decoration: none;
+      transition: border-color .15s, color .15s;
+    }
+    .btn-ghost:hover { border-color: var(--accent2); color: var(--accent2); }
+    .toolbar-divider {
+      width: 1px;
+      background: var(--border);
+      align-self: stretch;
+      margin: 0 4px;
+    }
+
+    /* ─── Grid ─── */
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 16px;
+      padding: 24px;
+    }
+
+    /* ─── Card ─── */
+    .vcard {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      transition: border-color .2s, transform .15s;
+    }
+    .vcard:hover {
+      border-color: var(--accent);
+      transform: translateY(-2px);
+    }
+
+    /* サムネイルエリア */
+    .vcard-thumb {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 16/9;
+      background: #0a0c14;
+      overflow: hidden;
+    }
+    .vcard-thumb img {
+      width: 100%; height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .vcard-thumb .no-thumb {
+      width: 100%; height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 2.5rem;
+      color: #2a2d3e;
+    }
+    .vcard-thumb .ext-badge {
+      position: absolute;
+      bottom: 8px; right: 8px;
+      background: rgba(0,0,0,.7);
+      color: #94a3b8;
+      font-size: .65rem;
+      font-weight: 700;
+      letter-spacing: .06em;
+      padding: 2px 6px;
+      border-radius: 4px;
+      text-transform: uppercase;
+    }
+    .vcard-thumb .match-badge {
+      position: absolute;
+      top: 8px; left: 8px;
+      background: var(--accent);
+      color: #fff;
+      font-size: .7rem;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 99px;
+    }
+    .custom-tag-panel {
+      display: none;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 10px 24px;
+      position: sticky;
+      top: 53px; /* ヘッダー高さ分 */
+      z-index: 90;
+    }
+    .custom-tag-panel.open { display: block; }
+    .custom-tag-inner {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+    }
+    .custom-tag-label {
+      font-size: .72rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      margin-right: 4px;
+    }
+    /* ─── Tag Modal ─── */
+    .tag-modal {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      width: min(480px, 95vw);
+      overflow: hidden;
+    }
+    .tag-modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border);
+      font-weight: 600;
+      font-size: .95rem;
+    }
+    .tag-modal-body {
+      padding: 16px 18px;
+      max-height: 60vh;
+      overflow-y: auto;
+    }
+    .tag-modal-section { margin-bottom: 16px; }
+    .tag-modal-section:last-child { margin-bottom: 0; }
+    .tag-modal-cat {
+      font-size: .68rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .07em;
+      margin-bottom: 7px;
+    }
+    .tag-modal-pills { display: flex; flex-wrap: wrap; gap: 6px; }
+    .tag-modal-pill {
+      padding: 4px 12px;
+      border-radius: 99px;
+      font-size: .78rem;
+      font-weight: 500;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: opacity .15s, transform .1s;
+      user-select: none;
+    }
+    .tag-modal-pill:hover { opacity: .8; }
+    .tag-modal-pill:active { transform: scale(.95); }
+    .tag-modal-pill.place   { background: var(--tag-place);   color: #93c5fd; }
+    .tag-modal-pill.weather { background: var(--tag-weather);  color: #67e8f9; }
+    .tag-modal-pill.time    { background: var(--tag-time);    color: #fcd34d; }
+    .tag-modal-pill.person  { background: var(--tag-person);  color: #a1a1aa; }
+    .tag-modal-pill.custom  { background: var(--tag-custom);  color: #c4b5fd; }
+    .tag-modal-pill.applied { opacity: .4; }
+    .tag-modal-pill.applied::after { content: " ✓"; }
+    .tag-modal-footer {
+      display: flex;
+      gap: 8px;
+      padding: 12px 18px;
+      border-top: 1px solid var(--border);
+    }
+    .tag-modal-footer input {
+      flex: 1;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 6px;
+      padding: 6px 10px;
+      font-size: .85rem;
+      outline: none;
+    }
+    .tag-modal-footer input:focus { border-color: var(--accent); }
+    .tag-modal-footer input::placeholder { color: var(--muted); }
+    /* ─── 選択モード ─── */
+    body.select-mode .vcard { cursor: pointer; }
+    body.select-mode .vcard:hover { border-color: var(--accent2); }
+    .vcard.selected { border-color: var(--accent) !important; box-shadow: 0 0 0 2px var(--accent); }
+    .select-check {
+      position: absolute;
+      top: 8px; right: 8px;
+      width: 22px; height: 22px;
+      border-radius: 50%;
+      background: rgba(0,0,0,.5);
+      border: 2px solid rgba(255,255,255,.4);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      font-size: .8rem;
+      color: #fff;
+      transition: background .15s, border-color .15s;
+    }
+    body.select-mode .select-check { display: flex; }
+    .vcard.selected .select-check {
+      background: var(--accent);
+      border-color: var(--accent);
+    }
+    /* フローティングバー */
+    .bulk-bar {
+      position: fixed;
+      bottom: 28px;
+      left: 50%;
+      transform: translateX(-50%) translateY(100px);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 99px;
+      padding: 10px 20px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      box-shadow: 0 8px 32px rgba(0,0,0,.5);
+      transition: transform .25s cubic-bezier(.34,1.56,.64,1);
+      z-index: 200;
+      white-space: nowrap;
+    }
+    .bulk-bar.visible { transform: translateX(-50%) translateY(0); }
+    .bulk-count { font-size: .88rem; color: var(--text); font-weight: 600; }
+    .bulk-count span { color: var(--accent2); }
+    .btn-select-mode {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      border-radius: 6px;
+      padding: 7px 14px;
+      font-size: .85rem;
+      cursor: pointer;
+      transition: all .15s;
+    }
+    .btn-select-mode.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+    .btn-select-mode:hover:not(.active) { border-color: var(--accent2); color: var(--accent2); }
+    .btn-delete {
+      background: transparent;
+      border: none;
+      font-size: .85rem;
+      opacity: .35;
+      cursor: pointer;
+      padding: 2px 4px;
+      transition: opacity .15s;
+    }
+    .btn-delete:hover { opacity: 1; }
+    .vcard-thumb { cursor: pointer; }
+    .play-overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0,0,0,0);
+      transition: background .2s;
+    }
+    .vcard-thumb:hover .play-overlay { background: rgba(0,0,0,.45); }
+    .play-icon {
+      color: #fff;
+      font-size: 2rem;
+      opacity: 0;
+      transform: scale(.8);
+      transition: opacity .2s, transform .2s;
+      text-shadow: 0 2px 8px rgba(0,0,0,.6);
+    }
+    .vcard-thumb:hover .play-icon { opacity: 1; transform: scale(1); }
+
+    /* ─── Video Modal ─── */
+    .vmodal-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.85);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+    .vmodal-backdrop.open { display: flex; }
+    .vmodal {
+      position: relative;
+      width: min(900px, 95vw);
+    }
+    .vmodal video {
+      width: 100%;
+      border-radius: 10px;
+      background: #000;
+      display: block;
+    }
+    .vmodal-title {
+      color: #e2e8f0;
+      font-size: .9rem;
+      margin-top: 10px;
+      text-align: center;
+      opacity: .7;
+    }
+    .vmodal-loader {
+      aspect-ratio: 16/9;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      background: #000;
+      border-radius: 10px;
+    }
+    .vmodal-spinner {
+      width: 44px; height: 44px;
+      border: 4px solid #334155;
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .vmodal-loader-text {
+      color: var(--muted);
+      font-size: .85rem;
+    }
+    .vmodal-close {
+      position: absolute;
+      top: -14px; right: -14px;
+      width: 32px; height: 32px;
+      border-radius: 50%;
+      background: #334155;
+      border: none;
+      color: #fff;
+      font-size: 1rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background .15s;
+    }
+    .vmodal-close:hover { background: #ef4444; }
+
+    /* カード本文 */
+    .vcard-body {
+      padding: 12px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .vcard-title {
+      font-size: .88rem;
+      font-weight: 600;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* タグ */
+    .tag-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      min-height: 24px;
+    }
+    .tag-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      font-size: .72rem;
+      font-weight: 500;
+      padding: 2px 8px;
+      border-radius: 99px;
+      border: none;
+      cursor: pointer;
+      transition: opacity .15s;
+    }
+    .tag-pill:hover { opacity: .75; }
+    .tag-pill.place   { background: var(--tag-place);   color: #93c5fd; }
+    .tag-pill.weather { background: var(--tag-weather);  color: #67e8f9; }
+    .tag-pill.time    { background: var(--tag-time);    color: #fcd34d; }
+    .tag-pill.person  { background: var(--tag-person);  color: #a1a1aa; }
+    .tag-pill.custom  { background: var(--tag-custom);  color: #c4b5fd; }
+    .tag-pill .remove { opacity: .6; font-size: .8rem; }
+
+    /* タグ追加トグル */
+    .btn-add-tag {
+      background: transparent;
+      border: 1px dashed var(--border);
+      color: var(--muted);
+      border-radius: 99px;
+      font-size: .72rem;
+      padding: 2px 10px;
+      cursor: pointer;
+      transition: border-color .15s, color .15s;
+    }
+    .btn-add-tag:hover { border-color: var(--accent2); color: var(--accent2); }
+
+
+    /* Empty state */
+    .empty {
+      grid-column: 1/-1;
+      text-align: center;
+      padding: 80px 20px;
+      color: var(--muted);
+    }
+    .empty .empty-icon { font-size: 3rem; margin-bottom: 12px; }
+
+    /* Filter tags */
+    #filter-tags-groups {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px 20px;
+      max-height: 200px;
+      overflow-y: auto;
+      padding-right: 4px;
+      align-items: flex-start;
+    }
+    .filter-group { flex-shrink: 0; }
+    .filter-group-label {
+      font-size: .65rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      margin-bottom: 4px;
+    }
+    .filter-tags-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+    }
+    .type-btn {
+      padding: 4px 12px;
+      font-size: .78rem;
+      font-weight: 600;
+      border: 1px solid var(--border);
+      cursor: pointer;
+      color: var(--muted);
+      background: var(--surface2);
+      border-radius: 6px;
+      transition: all .15s;
+    }
+    .type-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+    .mode-btn {
+      padding: 4px 12px;
+      font-size: .78rem;
+      font-weight: 600;
+      border: 1px solid var(--border);
+      cursor: pointer;
+      color: var(--muted);
+      background: var(--surface2);
+      transition: all .15s;
+    }
+    .mode-btn:first-of-type { border-radius: 6px 0 0 6px; border-right: none; }
+    .mode-btn:last-of-type  { border-radius: 0 6px 6px 0; }
+    .mode-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+    .filter-tag-pill {
+      display: inline-flex;
+      align-items: center;
+      border: 2px solid transparent;
+      border-radius: 99px;
+      font-size: .73rem;
+      padding: 2px 10px;
+      cursor: pointer;
+      transition: opacity .15s, border-color .15s;
+      white-space: nowrap;
+    }
+    .filter-tag-pill input[type=checkbox] { display: none; }
+    .filter-tag-pill.checked { border-color: #fff; font-weight: 600; }
+    .filter-tag-pill.dimmed { opacity: .2; pointer-events: none; }
+  </style>
+</head>
+<body>
+
+<!-- ─── Header ─── -->
+<header class="site-header">
+  <span style="font-size:1.3rem;">🎬</span>
+  <h1>Footage Manager</h1>
+  <span class="badge-count">{{ video_list|length }} 件</span>
+  <div style="margin-left:auto; display:flex; gap:8px;">
+    <button class="btn-select-mode" id="select-mode-btn" onclick="toggleSelectMode()">☑ 複数選択</button>
+    <button type="button" class="btn-ghost" style="border-color:#7f1d1d;color:#fca5a5;" onclick="deleteUntagged()">🗑 タグなし削除</button>
+    <button class="btn-ghost" onclick="openGroupModal()">⚙ グループ管理</button>
+  </div>
+</header>
+
+
+<!-- ─── Toolbar ─── -->
+<div class="toolbar">
+  <!-- スキャン -->
+  <form action="/scan" method="POST" style="display:flex; gap:8px; align-items:flex-end;">
+    <div>
+      <label>フォルダスキャン</label>
+      <div style="display:flex; gap:6px;">
+        <input type="text" name="folder_path" id="folder-path-input" placeholder="/Users/yourname/Videos" style="width:260px;" required>
+        <button type="button" class="btn-ghost" onclick="browseFolder()">📂 選択</button>
+      </div>
+    </div>
+    <button type="submit" class="btn-accent">スキャン</button>
+  </form>
+
+  <form action="/rescan_thumbnails" method="POST">
+    <button type="submit" class="btn-ghost" title="サムネ未取得の動画を再スキャン">🔄 サムネ再取得</button>
+  </form>
+  <div class="toolbar-divider"></div>
+
+  <!-- 検索・フィルター -->
+  <form action="/search" method="GET" id="filter-form" style="display:flex; gap:10px; align-items:flex-start; flex-wrap:wrap;">
+    <div>
+      <label>ファイル名</label>
+      <input type="text" name="q" placeholder="検索..." style="width:150px;"
+             value="{{ search_query if search_query is defined else '' }}">
+    </div>
+    <div>
+      <label>種別</label>
+      <div style="display:flex; gap:4px;">
+        <button type="button" class="type-btn" data-type="all" onclick="setTypeFilter('all')">すべて</button>
+        <button type="button" class="type-btn" data-type="video" onclick="setTypeFilter('video')">🎬 動画</button>
+        <button type="button" class="type-btn" data-type="image" onclick="setTypeFilter('image')">🖼 静止画</button>
+      </div>
+    </div>
+    <div>
+      <label>タグ絞り込み</label>
+      <input type="text" id="tag-search-input" placeholder="タグを検索..." style="width:140px; margin-bottom:6px; display:block;"
+             oninput="filterTagPills(this.value)">
+      <div id="filter-tags-groups">
+        {% for group_name, info in categories.items() %}
+        <div class="filter-group" data-group="{{ group_name }}">
+          <div class="filter-group-label">{{ group_name if group_name else 'グループなし' }}</div>
+          <div class="filter-tags-row">
+            {% for tag in info.tags %}
+            <label class="filter-tag-pill {% if selected_tags is defined and tag.id in selected_tags %}checked{% endif %}"
+                   data-name="{{ tag.name }}"
+                   style="background:{{ info.bg }}; color:{{ info.text }};">
+              <input type="checkbox" name="tags" value="{{ tag.id }}"
+                {% if selected_tags is defined and tag.id in selected_tags %}checked{% endif %}
+                onchange="this.closest('label').classList.toggle('checked', this.checked); this.closest('form').submit();">
+              {{ tag.name }}
+            </label>
+            {% endfor %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    <div style="display:flex; flex-direction:column; gap:6px; align-self:flex-end;">
+      <div style="display:flex; gap:4px;">
+        <label style="display:flex; align-items:center; gap:0;">
+          <input type="radio" name="mode" value="or" style="display:none;"
+            {% if search_mode is not defined or search_mode == 'or' %}checked{% endif %}>
+          <span class="mode-btn {% if search_mode is not defined or search_mode == 'or' %}active{% endif %}"
+                onclick="setMode('or')">OR</span>
+        </label>
+        <label style="display:flex; align-items:center; gap:0;">
+          <input type="radio" name="mode" value="and" style="display:none;"
+            {% if search_mode is defined and search_mode == 'and' %}checked{% endif %}>
+          <span class="mode-btn {% if search_mode is defined and search_mode == 'and' %}active{% endif %}"
+                onclick="setMode('and')">AND</span>
+        </label>
+      </div>
+      <div style="display:flex; gap:6px;">
+        <button type="submit" class="btn-accent">検索</button>
+        <a href="/" class="btn-ghost">リセット</a>
+      </div>
+    </div>
+  </form>
+</div>
+
+<!-- ─── Grid ─── -->
+<div class="grid">
+  {% if video_list %}
+    {% for item in video_list %}
+    {% set v = item.video %}
+    {% set tags = item.tags %}
+    <div class="vcard">
+      <!-- サムネイル -->
+      {% set ext = v.filename.rsplit('.', 1)[-1].lower() %}
+      {% set is_img = ext in ['jpg', 'jpeg', 'png', 'ai'] %}
+      <div class="vcard-thumb" onclick="onThumbClick(event, {{ v.id }}, '{{ v.filename | e }}', {{ 'true' if is_img else 'false' }})"
+           data-video-id="{{ v.id }}">
+        {% if v.thumbnail %}
+        <img src="/static/thumbnails/{{ v.thumbnail }}" alt="{{ v.filename }}">
+        {% elif is_img %}
+        <div class="no-thumb">🖼</div>
+        {% else %}
+        <div class="no-thumb">▶</div>
+        {% endif %}
+        <div class="select-check">✓</div>
+        {% if not is_img %}<div class="play-overlay"><span class="play-icon">▶</span></div>{% endif %}
+        <span class="ext-badge">{{ v.filename.rsplit('.', 1)[-1] }}</span>
+        {% if item.match_count is not none and item.total_selected > 1 %}
+        <span class="match-badge">{{ item.match_count }}/{{ item.total_selected }}</span>
+        {% endif %}
+      </div>
+
+      <!-- 本文 -->
+      <div class="vcard-body">
+        <div class="vcard-title" title="{{ v.filepath }}">{{ v.filename }}</div>
+
+        <!-- タグ一覧 -->
+        <div class="tag-list" id="tag-list-{{ v.id }}">
+          {% for tag in tags %}
+          {% set cat_key = tag.category if tag.category else '' %}
+          {% set color = categories[cat_key] if cat_key in categories else {'bg': '#2d1b4e', 'text': '#d8b4fe'} %}
+          <button class="tag-pill"
+            style="background:{{ color.bg }};color:{{ color.text }};"
+            onclick="removeTag({{ v.id }}, {{ tag.id }}, this)">
+            {{ tag.name }}<span class="remove">×</span>
+          </button>
+          {% endfor %}
+          <button class="btn-add-tag" onclick="openTagModal({{ v.id }}, '{{ v.filename | e }}')">+ タグ</button>
+          <button class="btn-delete" title="Finderで表示" onclick="revealInFinder({{ v.id }})">📂</button>
+          <form action="/video/{{ v.id }}/rescan_thumbnail" method="POST" style="display:inline;">
+            <button type="submit" class="btn-delete" title="サムネを再取得">🔄</button>
+          </form>
+          <button type="button" class="btn-delete" title="削除" onclick="deleteSingle({{ v.id }}, '{{ v.filename | e }}')">🗑</button>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+
+  {% else %}
+  <div class="empty">
+    <div class="empty-icon">📂</div>
+    <p>動画ファイルがありません。<br>フォルダパスを入力してスキャンしてください。</p>
+  </div>
+  {% endif %}
+</div>
+
+<!-- フローティング一括操作バー -->
+<div class="bulk-bar" id="bulk-bar">
+  <div class="bulk-count"><span id="bulk-count-num">0</span> 件選択中</div>
+  <button class="btn-accent" onclick="openBulkTagModal()">+ タグ追加</button>
+  <button class="btn-ghost" style="border-color:#7f1d1d;color:#fca5a5;" onclick="bulkDelete()">🗑 削除</button>
+  <button class="btn-ghost" onclick="clearSelection()">選択解除</button>
+</div>
+
+<!-- Group Manager Modal -->
+<div class="vmodal-backdrop" id="group-modal-backdrop" onclick="closeGroupModal(event)">
+  <div class="tag-modal" style="width:min(560px,95vw);">
+    <div class="tag-modal-header">
+      <span>グループ管理</span>
+      <button class="vmodal-close" style="position:static;" onclick="closeGroupModal(null)">✕</button>
+    </div>
+    <div class="tag-modal-body" id="group-modal-body" style="max-height:70vh;"></div>
+    <div class="tag-modal-footer">
+      <input type="text" id="new-group-input" placeholder="新しいグループ名">
+      <button class="btn-accent" onclick="addGroup()">追加</button>
+    </div>
+  </div>
+</div>
+
+<!-- Tag Modal -->
+<div class="vmodal-backdrop" id="tag-modal-backdrop" onclick="closeTagModal(event)">
+  <div class="tag-modal">
+    <div class="tag-modal-header">
+      <span id="tag-modal-title">タグを追加</span>
+      <button class="vmodal-close" style="position:static;" onclick="closeTagModal(null)">✕</button>
+    </div>
+    <div class="tag-modal-body" id="tag-modal-body"></div>
+    <div class="tag-modal-footer">
+      <div style="display:flex; flex-direction:column; gap:6px; flex:1;">
+        <input type="text" id="tag-custom-input" placeholder="タグ名（カンマ区切りで複数可）">
+        <input type="text" id="tag-group-input" placeholder="グループ名（任意）例: 場面, 演出">
+      </div>
+      <button class="btn-accent" onclick="addCustomTags()">追加</button>
+    </div>
+  </div>
+</div>
+
+<!-- Confirm Modal -->
+<div class="vmodal-backdrop" id="confirm-modal-backdrop">
+  <div class="tag-modal" style="width:min(360px,95vw);">
+    <div class="tag-modal-header">
+      <span id="confirm-modal-title">確認</span>
+    </div>
+    <div style="padding:16px 18px; font-size:.9rem; color:var(--text); line-height:1.6;" id="confirm-modal-message"></div>
+    <div class="tag-modal-footer" style="justify-content:flex-end;">
+      <button type="button" class="btn-ghost" onclick="confirmResolve(false)">キャンセル</button>
+      <button type="button" class="btn-accent" id="confirm-modal-ok" onclick="confirmResolve(true)">削除</button>
+    </div>
+  </div>
+</div>
+
+<!-- Video Modal -->
+<div class="vmodal-backdrop" id="vmodal-backdrop" onclick="closePlayer(event)">
+  <div class="vmodal">
+    <button class="vmodal-close" onclick="closePlayer(null)">✕</button>
+    <div class="vmodal-loader" id="vmodal-loader">
+      <div class="vmodal-spinner"></div>
+      <div class="vmodal-loader-text">変換中...</div>
+    </div>
+    <video id="vmodal-video" controls playsinline style="display:none;"></video>
+    <img id="vmodal-image" style="display:none; width:100%; border-radius:10px; background:#000;" alt="">
+    <div class="vmodal-title" id="vmodal-title"></div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+  const IMAGE_EXTS = new Set(['jpg','jpeg','png','ai']);
+  const VIDEO_EXTS = new Set(['mp4','mov','avi','mkv','mts']);
+
+  function setTypeFilter(type) {
+    document.querySelectorAll('.type-btn').forEach(b => b.classList.toggle('active', b.dataset.type === type));
+    document.querySelectorAll('.vcard').forEach(card => {
+      const ext = card.querySelector('.ext-badge')?.textContent.trim().toLowerCase();
+      if (!ext) return;
+      const isImage = IMAGE_EXTS.has(ext);
+      const isVideo = VIDEO_EXTS.has(ext);
+      let show = true;
+      if (type === 'video') show = isVideo;
+      if (type === 'image') show = isImage;
+      card.style.display = show ? '' : 'none';
+    });
+  }
+
+  // 初期状態は「すべて」をアクティブに
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelector('.type-btn[data-type="all"]').classList.add('active');
+  });
+
+  function setMode(mode) {
+    document.querySelectorAll('input[name="mode"]').forEach(r => r.checked = (r.value === mode));
+    document.querySelectorAll('.mode-btn').forEach(b => b.classList.toggle('active', b.textContent === mode.toUpperCase()));
+    document.getElementById('filter-form').submit();
+  }
+
+  function filterTagPills(query) {
+    const q = query.trim().toLowerCase();
+    document.querySelectorAll('#filter-tags-groups .filter-tag-pill').forEach(pill => {
+      const match = !q || pill.dataset.name.toLowerCase().includes(q);
+      pill.classList.toggle('dimmed', !!q && !match);
+    });
+  }
+
+  async function browseFolder() {
+    const res = await fetch('/browse');
+    const data = await res.json();
+    if (data.path) {
+      document.getElementById('folder-path-input').value = data.path;
+    }
+  }
+
+  // ─── 選択モード ───
+  let selectMode = false;
+  let selectedIds = new Set();
+
+  function toggleSelectMode() {
+    selectMode = !selectMode;
+    document.body.classList.toggle('select-mode', selectMode);
+    document.getElementById('select-mode-btn').classList.toggle('active', selectMode);
+    if (!selectMode) clearSelection();
+  }
+
+  function onThumbClick(event, videoId, filename, isImage) {
+    if (selectMode) {
+      toggleCardSelect(videoId);
+    } else if (isImage) {
+      openImageViewer(videoId, filename);
+    } else {
+      openPlayer(videoId, filename);
+    }
+  }
+
+  function toggleCardSelect(videoId) {
+    const card = document.querySelector(`.vcard-thumb[data-video-id="${videoId}"]`).closest('.vcard');
+    if (selectedIds.has(videoId)) {
+      selectedIds.delete(videoId);
+      card.classList.remove('selected');
+    } else {
+      selectedIds.add(videoId);
+      card.classList.add('selected');
+    }
+    updateBulkBar();
+  }
+
+  function updateBulkBar() {
+    const bar = document.getElementById('bulk-bar');
+    document.getElementById('bulk-count-num').textContent = selectedIds.size;
+    bar.classList.toggle('visible', selectedIds.size > 0);
+  }
+
+  function clearSelection() {
+    selectedIds.clear();
+    document.querySelectorAll('.vcard.selected').forEach(c => c.classList.remove('selected'));
+    updateBulkBar();
+  }
+
+  function openBulkTagModal() {
+    currentTagModalVideoId = null; // bulkモード
+    document.getElementById('tag-modal-title').textContent = `${selectedIds.size}件にタグを追加`;
+    document.getElementById('tag-custom-input').value = '';
+    buildModalBody(new Set()); // 選択状態なしで表示
+    document.getElementById('tag-modal-backdrop').classList.add('open');
+  }
+
+  // ─── タグデータ（サーバーから埋め込み） ───
+  const ALL_TAGS = [{% for t in all_tags %}[{{ t.id }}, {{ t.name | tojson }}, {{ t.category | tojson }}]{% if not loop.last %},{% endif %}{% endfor %}];
+  // グループ名 → {bg, text} の色マップ
+  const CAT_COLORS = {
+    {% for name, info in categories.items() %}"{{ name }}": {"bg": {{ info.bg | tojson }}, "text": {{ info.text | tojson }}},
+    {% endfor %}
+  };
+
+  // id → {name, category} のマップ
+  const TAG_MAP = {};
+  ALL_TAGS.forEach(([id, name, cat]) => { TAG_MAP[id] = { name, category: cat }; });
+
+  const DEFAULT_CAT_COLOR = {bg: "#2d1b4e", text: "#d8b4fe"};
+
+  function catColor(cat) {
+    return CAT_COLORS[cat || ""] || DEFAULT_CAT_COLOR;
+  }
+
+  function applyPillColor(el, cat) {
+    const c = catColor(cat);
+    el.style.background = c.bg;
+    el.style.color = c.text;
+  }
+
+  // ─── カードのタグ一覧を再描画 ───
+  function renderTagList(videoId, tags) {
+    const list = document.getElementById('tag-list-' + videoId);
+    // 既存のタグピルだけ消す（ボタン類は残す）
+    list.querySelectorAll('.tag-pill').forEach(el => el.remove());
+    const addBtn = list.querySelector('.btn-add-tag');
+    tags.forEach(tag => {
+      const btn = document.createElement('button');
+      btn.className = 'tag-pill';
+      applyPillColor(btn, tag.category);
+      btn.innerHTML = tag.name + '<span class="remove">×</span>';
+      btn.onclick = () => removeTag(videoId, tag.id, btn);
+      list.insertBefore(btn, addBtn);
+    });
+    // モーダルが開いていれば applied 状態を更新
+    if (currentTagModalVideoId === videoId) {
+      updateModalApplied(tags.map(t => t.id));
+    }
+  }
+
+  // ─── タグ削除（Ajax） ───
+  async function removeTag(videoId, tagId, btn) {
+    btn.style.opacity = '0.4';
+    const res = await fetch(`/api/video/${videoId}/tag/remove`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tag_id: tagId })
+    });
+    const data = await res.json();
+    renderTagList(videoId, data.tags);
+  }
+
+  // ─── タグ追加（Ajax） ───
+  async function addTag(videoId, tagId, customTag, customGroup) {
+    const res = await fetch(`/api/video/${videoId}/tag/add`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tag_id: tagId, custom_tag: customTag || '', custom_group: customGroup || '' })
+    });
+    const data = await res.json();
+    renderTagList(videoId, data.tags);
+    return data.tags;
+  }
+
+  // ─── タグモーダル ───
+  let currentTagModalVideoId = null;
+
+  function openTagModal(videoId, filename) {
+    currentTagModalVideoId = videoId;
+    document.getElementById('tag-modal-title').textContent = filename;
+    document.getElementById('tag-custom-input').value = '';
+
+    // 現在のタグIDを収集
+    const appliedIds = Array.from(
+      document.getElementById('tag-list-' + videoId).querySelectorAll('.tag-pill')
+    ).map(el => parseInt(el.dataset.tagId)).filter(Boolean);
+
+    // カードから現在のタグIDを取得（data属性なしの場合はテキストで照合）
+    const currentNames = new Set(
+      Array.from(document.getElementById('tag-list-' + videoId).querySelectorAll('.tag-pill'))
+        .map(el => el.textContent.replace('×','').trim())
+    );
+
+    buildModalBody(currentNames);
+    document.getElementById('tag-modal-backdrop').classList.add('open');
+  }
+
+  function buildModalBody(appliedNames) {
+    const body = document.getElementById('tag-modal-body');
+    body.innerHTML = '';
+    // ALL_TAGSをグループ別にまとめて表示（順序：グループあり→なし）
+    const groups = {};
+    ALL_TAGS.forEach(([id, name, cat]) => {
+      const key = cat || '';
+      if (!groups[key]) groups[key] = [];
+      groups[key].push([id, name, cat]);
+    });
+    const sorted = Object.entries(groups).sort(([a],[b]) => {
+      if (!a) return 1; if (!b) return -1;
+      return a.localeCompare(b);
+    });
+    sorted.forEach(([key, tags]) => {
+      const sec = document.createElement('div');
+      sec.className = 'tag-modal-section';
+      sec.innerHTML = `<div class="tag-modal-cat">${key || 'グループなし'}</div><div class="tag-modal-pills"></div>`;
+      const pillsEl = sec.querySelector('.tag-modal-pills');
+      tags.forEach(([id, name, cat]) => {
+        pillsEl.appendChild(makePill(id, name, cat, appliedNames.has(name)));
+      });
+      body.appendChild(sec);
+    });
+  }
+
+  function makePill(id, name, cat, applied) {
+    const btn = document.createElement('button');
+    btn.className = 'tag-modal-pill' + (applied ? ' applied' : '');
+    applyPillColor(btn, cat);
+    btn.dataset.tagId = id;
+    btn.textContent = name;
+    btn.onclick = async () => {
+      btn.style.pointerEvents = 'none';
+      if (currentTagModalVideoId === null) {
+        // 一括モード
+        await bulkAddTag(id, null);
+        btn.classList.add('applied');
+      } else {
+        const isApplied = btn.classList.contains('applied');
+        if (isApplied) {
+          await removeTag(currentTagModalVideoId, id, { style: {} });
+          btn.classList.remove('applied');
+        } else {
+          await addTag(currentTagModalVideoId, id, null);
+          btn.classList.add('applied');
+        }
+      }
+      btn.style.pointerEvents = '';
+    };
+    return btn;
+  }
+
+  async function bulkAddTag(tagId, customTag, customGroup) {
+    const res = await fetch('/api/bulk/tag/add', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ video_ids: [...selectedIds], tag_id: tagId, custom_tag: customTag || '', custom_group: customGroup || '' })
+    });
+    const data = await res.json();
+    // 各カードのタグ一覧を更新
+    for (const [vid, tags] of Object.entries(data)) {
+      renderTagList(parseInt(vid), tags);
+    }
+  }
+
+  function updateModalApplied(appliedIds) {
+    document.querySelectorAll('.tag-modal-pill').forEach(btn => {
+      btn.classList.toggle('applied', appliedIds.includes(parseInt(btn.dataset.tagId)));
+    });
+  }
+
+  async function addCustomTags() {
+    const input = document.getElementById('tag-custom-input');
+    const groupInput = document.getElementById('tag-group-input');
+    const val = input.value.trim();
+    const group = groupInput.value.trim();
+    if (!val) return;
+    if (currentTagModalVideoId === null) {
+      await bulkAddTag(null, val, group);
+    } else {
+      const names = val.split(',').map(s => s.trim()).filter(Boolean);
+      for (const name of names) {
+        await addTag(currentTagModalVideoId, null, name, group);
+      }
+    }
+    location.reload();
+  }
+
+  // ─── グループ管理モーダル ───
+  function openGroupModal() {
+    renderGroupModal();
+    document.getElementById('group-modal-backdrop').classList.add('open');
+  }
+
+  function closeGroupModal(event) {
+    if (event && event.target !== document.getElementById('group-modal-backdrop')) return;
+    document.getElementById('group-modal-backdrop').classList.remove('open');
+  }
+
+  function renderGroupModal() {
+    const body = document.getElementById('group-modal-body');
+    body.innerHTML = '';
+    // サーバーデータからグループ別に構築
+    const groups = {};
+    ALL_TAGS.forEach(([id, name, cat]) => {
+      const key = cat || '';
+      if (!groups[key]) groups[key] = [];
+      groups[key].push({ id, name, cat });
+    });
+    const allGroupNames = Object.keys(groups).sort((a,b) => {
+      if (!a) return 1; if (!b) return -1; return a.localeCompare(b);
+    });
+    allGroupNames.forEach(groupName => {
+      const tags = groups[groupName];
+      const sec = document.createElement('div');
+      sec.className = 'tag-modal-section';
+      sec.style.borderBottom = '1px solid var(--border)';
+      sec.style.paddingBottom = '12px';
+
+      // グループヘッダー（リネーム＋削除）
+      const header = document.createElement('div');
+      header.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;';
+
+      const nameInput = document.createElement('input');
+      nameInput.value = groupName;
+      nameInput.placeholder = 'グループ名';
+      nameInput.style.cssText = 'background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:4px 8px;font-size:.8rem;flex:1;min-width:80px;outline:none;';
+
+      // カラーピッカー（背景色・文字色）
+      const curColor = groups[groupName]?.[0] ? catColor(groups[groupName][0].cat) : DEFAULT_CAT_COLOR;
+      const colorWrap = document.createElement('div');
+      colorWrap.style.cssText = 'display:flex;align-items:center;gap:4px;';
+      const bgPicker = document.createElement('input');
+      bgPicker.type = 'color'; bgPicker.value = curColor.bg; bgPicker.title = '背景色';
+      bgPicker.style.cssText = 'width:28px;height:28px;border:none;border-radius:4px;cursor:pointer;padding:2px;background:none;';
+      const textPicker = document.createElement('input');
+      textPicker.type = 'color'; textPicker.value = curColor.text; textPicker.title = '文字色';
+      textPicker.style.cssText = 'width:28px;height:28px;border:none;border-radius:4px;cursor:pointer;padding:2px;background:none;';
+      const colorLabel = document.createElement('span');
+      colorLabel.style.cssText = 'font-size:.68rem;color:var(--muted);';
+      colorLabel.textContent = 'BG / Text';
+
+      const applyColorBtn = document.createElement('button');
+      applyColorBtn.textContent = '色を適用';
+      applyColorBtn.className = 'btn-ghost';
+      applyColorBtn.style.cssText = 'padding:4px 8px;font-size:.72rem;';
+      applyColorBtn.onclick = async () => {
+        await fetch('/api/category/color', {
+          method: 'POST', headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({name: groupName, bg: bgPicker.value, text: textPicker.value})
+        });
+        location.reload();
+      };
+      colorWrap.appendChild(colorLabel);
+      colorWrap.appendChild(bgPicker);
+      colorWrap.appendChild(textPicker);
+      colorWrap.appendChild(applyColorBtn);
+
+      const renameBtn = document.createElement('button');
+      renameBtn.textContent = '名前変更';
+      renameBtn.className = 'btn-ghost';
+      renameBtn.style.cssText = 'padding:4px 10px;font-size:.75rem;';
+      renameBtn.onclick = async () => {
+        const newName = nameInput.value.trim();
+        if (!newName || newName === groupName) return;
+        await fetch('/api/category/rename', {
+          method: 'POST', headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({old: groupName, new: newName})
+        });
+        location.reload();
+      };
+      const delBtn = document.createElement('button');
+      delBtn.textContent = '削除';
+      delBtn.style.cssText = 'padding:4px 10px;font-size:.75rem;background:transparent;border:1px solid #7f1d1d;color:#fca5a5;border-radius:6px;cursor:pointer;';
+      delBtn.onclick = async () => {
+        const deleteTags = await showConfirm(
+          `グループ「${groupName||'グループなし'}」を削除`,
+          'タグもまとめて削除しますか？\n「削除」→ タグごと削除　「キャンセル」→ タグはグループなしに移動',
+          'タグごと削除'
+        );
+        await fetch('/api/category/delete', {
+          method: 'POST', headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({name: groupName, delete_tags: deleteTags})
+        });
+        location.reload();
+      };
+      header.appendChild(nameInput);
+      header.appendChild(colorWrap);
+      header.appendChild(renameBtn);
+      if (groupName) header.appendChild(delBtn);
+      sec.appendChild(header);
+
+      // タグ一覧（グループ移動セレクト付き）
+      const pillsWrap = document.createElement('div');
+      pillsWrap.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;';
+      tags.forEach(tag => {
+        const wrap = document.createElement('div');
+        wrap.style.cssText = 'display:flex;align-items:center;gap:4px;background:var(--surface2);border:1px solid var(--border);border-radius:99px;padding:2px 4px 2px 10px;';
+        const label = document.createElement('span');
+        label.textContent = tag.name;
+        label.style.cssText = 'font-size:.75rem;color:var(--text);';
+        const sel = document.createElement('select');
+        sel.style.cssText = 'background:transparent;border:none;color:var(--muted);font-size:.7rem;cursor:pointer;outline:none;max-width:80px;';
+        sel.innerHTML = `<option value="">移動▾</option>` +
+          allGroupNames.filter(g => g !== groupName).map(g =>
+            `<option value="${g}">${g || 'グループなし'}</option>`
+          ).join('') +
+          `<option value="__new__">新しいグループへ…</option>`;
+        sel.onchange = async () => {
+          let dest = sel.value;
+          if (!dest) return;
+          if (dest === '__new__') {
+            dest = prompt('移動先のグループ名を入力');
+            if (!dest) { sel.value=''; return; }
+          }
+          await fetch(`/api/tag/${tag.id}/category`, {
+            method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({category: dest || null})
+          });
+          location.reload();
+        };
+        const delTag = document.createElement('button');
+        delTag.textContent = '×';
+        delTag.style.cssText = 'background:none;border:none;color:var(--muted);cursor:pointer;font-size:.85rem;padding:0 4px;line-height:1;';
+        delTag.onclick = async () => {
+          const ok = await showConfirm('タグ削除', `タグ「${tag.name}」を削除しますか？`);
+          if (!ok) return;
+          await fetch(`/tag/${tag.id}/delete`, {method:'POST'});
+          location.reload();
+        };
+        wrap.appendChild(label);
+        wrap.appendChild(sel);
+        wrap.appendChild(delTag);
+        pillsWrap.appendChild(wrap);
+      });
+      sec.appendChild(pillsWrap);
+      body.appendChild(sec);
+    });
+  }
+
+  async function addGroup() {
+    const input = document.getElementById('new-group-input');
+    const name = input.value.trim();
+    if (!name) return;
+    // グループだけ追加（タグなし）→ タグを1つ追加してカテゴリを設定する必要はない
+    // ここではモーダルの表示上に追加するだけ（タグを追加したときに自動作成）
+    alert(`グループ「${name}」はタグを追加するときに自動で作成されます。\nタグモーダルの自由入力欄でグループ名を指定してください。`);
+    input.value = '';
+  }
+
+  function closeTagModal(event) {
+    if (event && event.target !== document.getElementById('tag-modal-backdrop')) return;
+    document.getElementById('tag-modal-backdrop').classList.remove('open');
+    currentTagModalVideoId = null;
+  }
+
+  function openPlayer(videoId, filename) {
+    const backdrop = document.getElementById('vmodal-backdrop');
+    const video = document.getElementById('vmodal-video');
+    const loader = document.getElementById('vmodal-loader');
+    const loaderText = loader.querySelector('.vmodal-loader-text');
+    const title = document.getElementById('vmodal-title');
+
+    // 前回のイベントをリセット
+    video.pause();
+    video.removeAttribute('src');
+    video.load();
+
+    loader.style.display = 'flex';
+    loaderText.textContent = '変換中...';
+    video.style.display = 'none';
+    title.textContent = filename;
+    backdrop.classList.add('open');
+
+    function onReady() {
+      loader.style.display = 'none';
+      video.style.display = 'block';
+      video.play().catch(() => {});
+    }
+    function onError() {
+      loaderText.textContent = '再生できませんでした';
+    }
+
+    video.addEventListener('canplay', onReady, { once: true });
+    video.addEventListener('error', onError, { once: true });
+
+    // srcをセットしてロード開始
+    video.src = '/video/' + videoId + '/stream';
+    video.load();
+  }
+
+  function openImageViewer(videoId, filename) {
+    const backdrop = document.getElementById('vmodal-backdrop');
+    const img = document.getElementById('vmodal-image');
+    const video = document.getElementById('vmodal-video');
+    const loader = document.getElementById('vmodal-loader');
+    document.getElementById('vmodal-title').textContent = filename;
+    video.style.display = 'none';
+    loader.style.display = 'none';
+    img.style.display = 'block';
+    img.src = '/video/' + videoId + '/stream';
+    backdrop.classList.add('open');
+  }
+
+  function closePlayer(event) {
+    if (event && event.target !== document.getElementById('vmodal-backdrop')) return;
+    const backdrop = document.getElementById('vmodal-backdrop');
+    const video = document.getElementById('vmodal-video');
+    video.pause();
+    video.removeAttribute('src');
+    video.load();
+    document.getElementById('vmodal-image').style.display = 'none';
+    backdrop.classList.remove('open');
+  }
+
+  let confirmResolve = null;
+
+  function showConfirm(title, message, okLabel = '削除') {
+    return new Promise(resolve => {
+      document.getElementById('confirm-modal-title').textContent = title;
+      document.getElementById('confirm-modal-message').textContent = message;
+      document.getElementById('confirm-modal-ok').textContent = okLabel;
+      document.getElementById('confirm-modal-backdrop').classList.add('open');
+      confirmResolve = (result) => {
+        document.getElementById('confirm-modal-backdrop').classList.remove('open');
+        resolve(result);
+      };
+    });
+  }
+
+  async function deleteUntagged() {
+    const countRes = await fetch('/api/count_untagged');
+    const countData = await countRes.json();
+    if (countData.count === 0) {
+      showConfirm('タグなし削除', 'タグなしの素材はありません', 'OK');
+      return;
+    }
+    const ok = await showConfirm('タグなし削除', `タグなしの素材が ${countData.count} 件あります。リストから削除しますか？`);
+    if (!ok) return;
+    await fetch('/api/delete_untagged', { method: 'POST' });
+    location.reload();
+  }
+
+  async function bulkDelete() {
+    const ok = await showConfirm('一括削除', `${selectedIds.size} 件をリストから削除しますか？`);
+    if (!ok) return;
+    await fetch('/api/bulk/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ video_ids: [...selectedIds] })
+    });
+    location.reload();
+  }
+
+  async function deleteSingle(videoId, filename) {
+    const ok = await showConfirm('削除', `「${filename}」をリストから削除しますか？`);
+    if (!ok) return;
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = `/video/${videoId}/delete`;
+    document.body.appendChild(form);
+    form.submit();
+  }
+
+  async function revealInFinder(videoId) {
+    await fetch(`/api/video/${videoId}/reveal`, { method: 'POST' });
+  }
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      closePlayer(null);
+      closeTagModal(null);
+      closeGroupModal(null);
+    }
+  });
+</script>
+</body>
+</html>
