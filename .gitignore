@@ -3,3 +3,6 @@ __pycache__/
 footage.db
 static/thumbnails/
 static/converted/
+.env
+media_helper/build/
+media_helper/dist/

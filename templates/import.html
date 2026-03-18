@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>プロジェクトインポート — Footage Manager</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface2: #22263a;
+      --border: #2e3348;
+      --accent: #6c63ff;
+      --accent2: #a78bfa;
+      --text: #e2e8f0;
+      --muted: #64748b;
+    }
+    * { box-sizing: border-box; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      min-height: 100vh;
+    }
+
+    /* Header */
+    .site-header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .site-header h1 { font-size: 1.1rem; font-weight: 700; margin: 0; }
+    .btn-ghost {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 8px;
+      padding: 6px 14px;
+      font-size: .85rem;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-block;
+    }
+    .btn-ghost:hover { border-color: var(--accent2); color: var(--accent2); }
+
+    /* Main */
+    .main-content { max-width: 1100px; margin: 0 auto; padding: 32px 20px; }
+
+    /* Step section */
+    .step-section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 24px;
+    }
+    .step-label {
+      font-size: .75rem;
+      font-weight: 700;
+      letter-spacing: .08em;
+      color: var(--accent2);
+      text-transform: uppercase;
+      margin-bottom: 16px;
+    }
+    .form-input {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      padding: 10px 14px;
+      font-size: .9rem;
+      width: 100%;
+      outline: none;
+      transition: border-color .15s;
+    }
+    .form-input:focus { border-color: var(--accent); }
+    .form-input::placeholder { color: var(--muted); }
+
+    .btn-primary-custom {
+      background: var(--accent);
+      border: none;
+      border-radius: 8px;
+      color: #fff;
+      padding: 10px 22px;
+      font-size: .9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity .15s;
+    }
+    .btn-primary-custom:hover { opacity: .85; }
+    .btn-primary-custom:disabled { opacity: .4; cursor: not-allowed; }
+
+    /* Progress */
+    .progress-bar-wrap {
+      background: var(--surface2);
+      border-radius: 99px;
+      height: 6px;
+      overflow: hidden;
+      margin-top: 12px;
+    }
+    .progress-bar-fill {
+      height: 100%;
+      background: var(--accent);
+      border-radius: 99px;
+      transition: width .3s;
+    }
+
+    /* Grid */
+    .import-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 16px;
+    }
+    .import-card {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    .import-card-thumb {
+      width: 100%;
+      aspect-ratio: 16/9;
+      object-fit: cover;
+      background: #000;
+      display: block;
+    }
+    .import-card-thumb-placeholder {
+      width: 100%;
+      aspect-ratio: 16/9;
+      background: var(--surface);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--muted);
+      font-size: 2rem;
+    }
+    .import-card-body { padding: 10px 12px; }
+    .import-card-name {
+      font-size: .78rem;
+      color: var(--muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-bottom: 8px;
+    }
+    .import-card-actions {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+    .btn-card-action {
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--muted);
+      font-size: .72rem;
+      padding: 3px 8px;
+      cursor: pointer;
+    }
+    .btn-card-action:hover { color: var(--text); border-color: var(--accent2); }
+
+    /* Tag badges */
+    .tag-badges { display: flex; flex-wrap: wrap; gap: 5px; }
+    .tag-badge {
+      font-size: .72rem;
+      padding: 3px 9px;
+      border-radius: 99px;
+      border: 1px solid #6c63ff;
+      color: #c4b5fd;
+      background: transparent;
+      cursor: pointer;
+      user-select: none;
+      transition: opacity .15s, background .15s;
+    }
+    .tag-badge.approved { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .tag-badge.rejected { opacity: .3; text-decoration: line-through; border-color: var(--muted); color: var(--muted); }
+    .tag-badge.is-new { border-style: dashed; }
+
+    /* Top actions */
+    .top-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    /* Loading overlay */
+    #loading-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.7);
+      z-index: 999;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 16px;
+    }
+    #loading-overlay.show { display: flex; }
+    .spinner {
+      width: 44px; height: 44px;
+      border: 4px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #loading-msg { color: var(--text); font-size: .95rem; }
+  </style>
+</head>
+<body>
+
+<header class="site-header">
+  <span style="font-size:1.3rem;">🎬</span>
+  <h1>プロジェクトインポート</h1>
+  <div style="margin-left:auto;">
+    <a href="/" class="btn-ghost">← 素材一覧へ</a>
+  </div>
+</header>
+
+<div class="main-content">
+
+  <!-- Step 1 -->
+  <div class="step-section">
+    <div class="step-label">Step 1 — フォルダを指定</div>
+    <div style="display:flex; gap:10px; margin-bottom:14px;">
+      <input type="text" id="folder-path-input" class="form-input" placeholder="/path/to/project_folder" style="flex:1;">
+      <button class="btn-ghost" onclick="browseFolder()">📂 選択</button>
+    </div>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:14px;">
+      <div>
+        <label style="font-size:.8rem; color:var(--muted); margin-bottom:5px; display:block;">プロジェクト名</label>
+        <input type="text" id="project-name-input" class="form-input" placeholder="プロジェクト名">
+      </div>
+      <div>
+        <label style="font-size:.8rem; color:var(--muted); margin-bottom:5px; display:block;">Vimeo URL（任意）</label>
+        <input type="text" id="vimeo-url-input" class="form-input" placeholder="https://vimeo.com/...">
+      </div>
+    </div>
+    <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+      <button class="btn-primary-custom" id="scan-btn" onclick="doScan()">🔍 スキャン</button>
+      <button class="btn-primary-custom" id="ai-btn" onclick="doAiTags()" disabled style="background:#0e4a5a;">✨ AIタグを生成</button>
+      <span id="scan-status" style="font-size:.82rem; color:var(--muted);"></span>
+    </div>
+  </div>
+
+  <!-- Step 2 -->
+  <div id="step2" style="display:none;">
+    <div class="top-actions">
+      <button class="btn-primary-custom" onclick="approveAll()">✅ 全素材を全承認</button>
+      <button class="btn-ghost" onclick="rejectAll()">✕ 全素材を全却下</button>
+      <button class="btn-primary-custom" id="confirm-btn" onclick="doConfirm()" style="margin-left:auto;">💾 登録確定</button>
+    </div>
+    <div id="import-grid" class="import-grid"></div>
+  </div>
+
+</div>
+
+<!-- Loading overlay -->
+<div id="loading-overlay">
+  <div class="spinner"></div>
+  <div id="loading-msg">処理中...</div>
+</div>
+
+<script>
+  let scannedFiles = [];
+  // tagDecisions[filepath][tagName] = true(approved) / false(rejected)
+  let tagDecisions = {};
+
+  function showLoading(msg) {
+    document.getElementById('loading-msg').textContent = msg;
+    document.getElementById('loading-overlay').classList.add('show');
+  }
+  function hideLoading() {
+    document.getElementById('loading-overlay').classList.remove('show');
+  }
+
+  async function browseFolder() {
+    const resp = await fetch('/browse');
+    const data = await resp.json();
+    if (data.path) {
+      document.getElementById('folder-path-input').value = data.path;
+      // プロジェクト名を自動セット
+      const parts = data.path.replace(/\/$/, '').split('/');
+      const name = parts[parts.length - 1] || '';
+      if (!document.getElementById('project-name-input').value) {
+        document.getElementById('project-name-input').value = name;
+      }
+    }
+  }
+
+  async function doScan() {
+    const folder = document.getElementById('folder-path-input').value.trim();
+    if (!folder) { alert('フォルダパスを入力してください'); return; }
+
+    showLoading('スキャン中...');
+    try {
+      const resp = await fetch('/api/import/scan', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({folder_path: folder})
+      });
+      const data = await resp.json();
+      if (data.error) { alert(data.error); return; }
+
+      scannedFiles = data.files;
+      tagDecisions = {};
+
+      // プロジェクト名を自動セット（空の時のみ）
+      if (!document.getElementById('project-name-input').value && data.project_name) {
+        document.getElementById('project-name-input').value = data.project_name;
+      }
+
+      document.getElementById('scan-status').textContent = `${scannedFiles.length} 件のファイルが見つかりました`;
+      document.getElementById('ai-btn').disabled = scannedFiles.length === 0;
+
+      renderGrid();
+      document.getElementById('step2').style.display = '';
+    } catch(e) {
+      alert('スキャンに失敗しました: ' + e);
+    } finally {
+      hideLoading();
+    }
+  }
+
+  async function doAiTags() {
+    const existingTagsResp = await fetch('/search?format=json');
+    // 既存タグをAPIから取得する（/api/tags エンドポイント代わりに直接埋め込み）
+    showLoading('AIがサムネイルを解析中... (しばらくお待ちください)');
+    try {
+      // 既存タグを取得
+      const tagsResp = await fetch('/api/all_tags');
+      const existingTags = tagsResp.ok ? await tagsResp.json() : [];
+
+      const resp = await fetch('/api/import/ai-tags', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          files: scannedFiles.map(f => ({filepath: f.filepath, thumbnail: f.thumbnail})),
+          existing_tags: existingTags
+        })
+      });
+      const data = await resp.json();
+      if (data.error) { alert('エラー: ' + data.error); return; }
+
+      // 推奨タグをscannedFilesに反映
+      const resultMap = {};
+      (data.results || []).forEach(r => { resultMap[r.filepath] = r.suggested_tags || []; });
+
+      scannedFiles.forEach(f => {
+        const suggested = resultMap[f.filepath] || [];
+        f.suggested_tags = suggested;
+
+        if (!tagDecisions[f.filepath]) tagDecisions[f.filepath] = {};
+        suggested.forEach(tag => {
+          // confidence 0.7未満は初期「未承認」
+          tagDecisions[f.filepath][tag.name] = tag.confidence >= 0.7;
+        });
+      });
+
+      renderGrid();
+    } catch(e) {
+      alert('AI解析に失敗しました: ' + e);
+    } finally {
+      hideLoading();
+    }
+  }
+
+  function renderGrid() {
+    const grid = document.getElementById('import-grid');
+    grid.innerHTML = '';
+    scannedFiles.forEach(f => {
+      const card = document.createElement('div');
+      card.className = 'import-card';
+
+      const thumbHtml = f.thumbnail
+        ? `<img class="import-card-thumb" src="/static/thumbnails/${f.thumbnail}" loading="lazy">`
+        : `<div class="import-card-thumb-placeholder">🎞</div>`;
+
+      card.innerHTML = `
+        ${thumbHtml}
+        <div class="import-card-body">
+          <div class="import-card-name" title="${f.filename}">${f.filename}</div>
+          <div class="import-card-actions">
+            <button class="btn-card-action" onclick="approveAllTags('${f.filepath}')">全承認</button>
+            <button class="btn-card-action" onclick="rejectAllTags('${f.filepath}')">全却下</button>
+          </div>
+          <div class="tag-badges" id="badges-${encodeURIComponent(f.filepath)}"></div>
+        </div>
+      `;
+      grid.appendChild(card);
+      renderBadges(f);
+    });
+  }
+
+  function renderBadges(f) {
+    const container = document.getElementById('badges-' + encodeURIComponent(f.filepath));
+    if (!container) return;
+    container.innerHTML = '';
+    const decisions = tagDecisions[f.filepath] || {};
+    (f.suggested_tags || []).forEach(tag => {
+      const approved = decisions[tag.name];
+      const badge = document.createElement('span');
+      badge.className = 'tag-badge' + (approved ? ' approved' : ' rejected') + (tag.is_new ? ' is-new' : '');
+      badge.title = `confidence: ${(tag.confidence * 100).toFixed(0)}%` + (tag.is_new ? ' [新規]' : '');
+      badge.textContent = (tag.is_new ? '＋' : '') + tag.name;
+      badge.onclick = () => toggleTag(f, tag.name);
+      container.appendChild(badge);
+    });
+  }
+
+  function toggleTag(f, tagName) {
+    if (!tagDecisions[f.filepath]) tagDecisions[f.filepath] = {};
+    tagDecisions[f.filepath][tagName] = !tagDecisions[f.filepath][tagName];
+    renderBadges(f);
+  }
+
+  function approveAllTags(filepath) {
+    const f = scannedFiles.find(x => x.filepath === filepath);
+    if (!f) return;
+    if (!tagDecisions[filepath]) tagDecisions[filepath] = {};
+    (f.suggested_tags || []).forEach(tag => { tagDecisions[filepath][tag.name] = true; });
+    renderBadges(f);
+  }
+
+  function rejectAllTags(filepath) {
+    const f = scannedFiles.find(x => x.filepath === filepath);
+    if (!f) return;
+    if (!tagDecisions[filepath]) tagDecisions[filepath] = {};
+    (f.suggested_tags || []).forEach(tag => { tagDecisions[filepath][tag.name] = false; });
+    renderBadges(f);
+  }
+
+  function approveAll() {
+    scannedFiles.forEach(f => approveAllTags(f.filepath));
+  }
+
+  function rejectAll() {
+    scannedFiles.forEach(f => rejectAllTags(f.filepath));
+  }
+
+  async function doConfirm() {
+    const projectName = document.getElementById('project-name-input').value.trim();
+    const folderPath = document.getElementById('folder-path-input').value.trim();
+    const vimeoUrl = document.getElementById('vimeo-url-input').value.trim();
+
+    if (!projectName) { alert('プロジェクト名を入力してください'); return; }
+    if (scannedFiles.length === 0) { alert('スキャン済みのファイルがありません'); return; }
+
+    const files = scannedFiles.map(f => {
+      const decisions = tagDecisions[f.filepath] || {};
+      const approvedTags = (f.suggested_tags || [])
+        .filter(tag => decisions[tag.name] === true)
+        .map(tag => ({name: tag.name, category: tag.category, is_new: tag.is_new}));
+      return {
+        filepath: f.filepath,
+        filename: f.filename,
+        thumbnail: f.thumbnail,
+        approved_tags: approvedTags
+      };
+    });
+
+    showLoading('登録中...');
+    try {
+      const resp = await fetch('/api/import/confirm', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({project_name: projectName, folder_path: folderPath, vimeo_url: vimeoUrl, files})
+      });
+      const data = await resp.json();
+      if (data.ok) {
+        alert(`✅ 登録完了！ ${data.imported} 件をインポートしました。`);
+        window.location.href = `/search?project_id=${data.project_id}`;
+      } else {
+        alert('エラー: ' + (data.error || '不明'));
+      }
+    } catch(e) {
+      alert('登録に失敗しました: ' + e);
+    } finally {
+      hideLoading();
+    }
+  }
+</script>
+</body>
+</html>

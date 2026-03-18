@@ -1,14 +1,28 @@
 import os
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
 import glob
 import sqlite3
 import subprocess
 import hashlib
+import base64
+import json
+import anthropic
 from flask import Flask, render_template, request, redirect, url_for, send_file, abort, jsonify
 
 app = Flask(__name__)
 DB_PATH = os.path.join(os.path.dirname(__file__), "footage.db")
 THUMBNAIL_DIR = os.path.join(os.path.dirname(__file__), "static", "thumbnails")
 CONVERTED_DIR = os.path.join(os.path.dirname(__file__), "static", "converted")
+
+# NAS設定（Finderで開く機能用）
+# 環境変数で上書き可能。ローカル開発時は NAS_MOUNT_PREFIX=/Volumes/CREATIVE を指定
+NAS_IP = os.environ.get("NAS_IP", "192.168.101.20")
+NAS_SHARE = os.environ.get("NAS_SHARE", "CREATIVE")
+NAS_MOUNT_PREFIX = os.environ.get("NAS_MOUNT_PREFIX", "/Users/giditalsignage/mnt/CREATIVE")
 
 PRESET_TAGS = {
     "場所": ["屋内", "屋外", "スタジオ", "街中"],
@@ -151,11 +165,22 @@ def init_db():
             bg_color   TEXT NOT NULL DEFAULT '#2d1b4e',
             text_color TEXT NOT NULL DEFAULT '#d8b4fe'
         );
+        CREATE TABLE IF NOT EXISTS projects (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            name        TEXT NOT NULL,
+            folder_path TEXT,
+            vimeo_url   TEXT,
+            created_at  TEXT DEFAULT (datetime('now'))
+        );
     """)
-    # 既存DBへのマイグレーション（thumbnail列が無ければ追加）
+    # 既存DBへのマイグレーション
     columns = [r[1] for r in conn.execute("PRAGMA table_info(videos)").fetchall()]
     if "thumbnail" not in columns:
         conn.execute("ALTER TABLE videos ADD COLUMN thumbnail TEXT")
+    if "project_id" not in columns:
+        conn.execute("ALTER TABLE videos ADD COLUMN project_id INTEGER REFERENCES projects(id)")
+    if "final_url" not in columns:
+        conn.execute("ALTER TABLE videos ADD COLUMN final_url TEXT")
     # プリセットカテゴリの色を登録
     for cat_name, color in PRESET_COLORS.items():
         conn.execute(
@@ -192,6 +217,7 @@ def index():
 
     all_tags = conn.execute("SELECT * FROM tags ORDER BY COALESCE(category,'zzz'), name").fetchall()
     categories = get_categories(conn)
+    projects = conn.execute("SELECT id, name FROM projects ORDER BY created_at DESC").fetchall()
     conn.close()
 
     return render_template(
@@ -199,6 +225,11 @@ def index():
         video_list=video_list,
         all_tags=all_tags,
         categories=categories,
+        projects=projects,
+        selected_tags=[],
+        search_query="",
+        search_mode="or",
+        selected_project_id=None,
     )
 
 
@@ -464,10 +495,18 @@ def remove_tag(video_id):
 def search():
     tag_ids = request.args.getlist("tags")
     query = request.args.get("q", "").strip()
+    project_id = request.args.get("project_id", "").strip()
 
     conn = get_db()
 
     search_mode = request.args.get("mode", "or")
+
+    proj_filter = ""
+    proj_params = []
+    if project_id:
+        proj_filter = "AND videos.project_id = ?"
+        proj_params = [project_id]
+
     if tag_ids:
         placeholders = ",".join("?" * len(tag_ids))
         having = f"HAVING COUNT(DISTINCT video_tags.tag_id) = {len(tag_ids)}" if search_mode == "and" else ""
@@ -475,16 +514,21 @@ def search():
             SELECT videos.*, COUNT(DISTINCT video_tags.tag_id) AS match_count
             FROM videos
             JOIN video_tags ON videos.id = video_tags.video_id
-            WHERE video_tags.tag_id IN ({placeholders})
+            WHERE video_tags.tag_id IN ({placeholders}) {proj_filter}
             GROUP BY videos.id
             {having}
             ORDER BY match_count DESC, videos.added_at DESC
         """
-        videos = conn.execute(sql, tag_ids).fetchall()
+        videos = conn.execute(sql, tag_ids + proj_params).fetchall()
     elif query:
         videos = conn.execute(
-            "SELECT * FROM videos WHERE filename LIKE ? ORDER BY added_at DESC",
-            (f"%{query}%",)
+            f"SELECT * FROM videos WHERE filename LIKE ? {proj_filter} ORDER BY added_at DESC",
+            [f"%{query}%"] + proj_params
+        ).fetchall()
+    elif project_id:
+        videos = conn.execute(
+            "SELECT * FROM videos WHERE project_id = ? ORDER BY added_at DESC",
+            proj_params
         ).fetchall()
     else:
         videos = conn.execute(
@@ -504,6 +548,7 @@ def search():
 
     all_tags = conn.execute("SELECT * FROM tags ORDER BY COALESCE(category,'zzz'), name").fetchall()
     categories = get_categories(conn)
+    projects = conn.execute("SELECT id, name FROM projects ORDER BY created_at DESC").fetchall()
     conn.close()
 
     return render_template(
@@ -511,9 +556,11 @@ def search():
         video_list=video_list,
         all_tags=all_tags,
         categories=categories,
+        projects=projects,
         selected_tags=[int(t) for t in tag_ids],
         search_query=query,
         search_mode=search_mode,
+        selected_project_id=int(project_id) if project_id else None,
     )
 
 
@@ -579,9 +626,18 @@ def reveal_in_finder(video_id):
     conn = get_db()
     video = conn.execute("SELECT filepath FROM videos WHERE id = ?", (video_id,)).fetchone()
     conn.close()
-    if not video or not os.path.exists(video["filepath"]):
+    if not video:
         return jsonify({"error": "file not found"}), 404
-    subprocess.run(["open", "-R", video["filepath"]])
+    filepath = video["filepath"]
+    # NASマウントパスをSMB URLとMacローカルパスに変換
+    if NAS_MOUNT_PREFIX and filepath.startswith(NAS_MOUNT_PREFIX):
+        rel = filepath[len(NAS_MOUNT_PREFIX):].lstrip("/")
+        smb_url = f"smb://{NAS_IP}/{NAS_SHARE}/{rel}"
+        mac_path = f"/Volumes/{NAS_SHARE}/{rel}"
+        return jsonify({"smb_url": smb_url, "mac_path": mac_path})
+    # ローカルファイルの場合はサーバー側でopen
+    if os.path.exists(filepath):
+        subprocess.run(["open", "-R", filepath])
     return jsonify({"ok": True})
 
 
@@ -647,6 +703,243 @@ def api_tag_set_category(tag_id):
     return jsonify({"ok": True})
 
 
+@app.route("/api/bulk/url", methods=["POST"])
+def api_bulk_url():
+    data = request.get_json()
+    video_ids = data.get("video_ids", [])
+    url = (data.get("final_url") or "").strip() or None
+    conn = get_db()
+    for vid in video_ids:
+        conn.execute("UPDATE videos SET final_url = ? WHERE id = ?", (url, vid))
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/video/<int:video_id>/info")
+def api_video_info(video_id):
+    conn = get_db()
+    video = conn.execute("""
+        SELECT v.*, p.name as project_name, p.vimeo_url, p.id as proj_id
+        FROM videos v
+        LEFT JOIN projects p ON v.project_id = p.id
+        WHERE v.id = ?
+    """, (video_id,)).fetchone()
+    if not video:
+        conn.close()
+        return jsonify({"error": "not found"}), 404
+    tags = conn.execute("""
+        SELECT tags.id, tags.name, tags.category
+        FROM tags JOIN video_tags ON tags.id = video_tags.tag_id
+        WHERE video_tags.video_id = ?
+    """, (video_id,)).fetchall()
+    conn.close()
+    return jsonify({
+        "id": video["id"],
+        "filename": video["filename"],
+        "project_id": video["proj_id"],
+        "project_name": video["project_name"],
+        "vimeo_url": video["vimeo_url"],
+        "final_url": video["final_url"],
+        "tags": [dict(t) for t in tags],
+    })
+
+
+@app.route("/api/video/<int:video_id>/url", methods=["POST"])
+def api_video_url(video_id):
+    data = request.get_json()
+    url = (data.get("final_url") or "").strip() or None
+    conn = get_db()
+    conn.execute("UPDATE videos SET final_url = ? WHERE id = ?", (url, video_id))
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/project/<int:project_id>/vimeo", methods=["POST"])
+def api_project_vimeo(project_id):
+    data = request.get_json()
+    url = (data.get("vimeo_url") or "").strip() or None
+    conn = get_db()
+    conn.execute("UPDATE projects SET vimeo_url = ? WHERE id = ?", (url, project_id))
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/all_tags")
+def api_all_tags():
+    conn = get_db()
+    tags = conn.execute("SELECT id, name, category FROM tags ORDER BY name").fetchall()
+    conn.close()
+    return jsonify([dict(t) for t in tags])
+
+
+@app.route("/import")
+def import_page():
+    return render_template("import.html")
+
+
+@app.route("/api/import/scan", methods=["POST"])
+def api_import_scan():
+    data = request.get_json()
+    folder_path = (data.get("folder_path") or "").strip()
+    if not folder_path or not os.path.isdir(folder_path):
+        return jsonify({"error": "invalid folder"}), 400
+
+    files_found = []
+    for ext in EXTENSIONS:
+        files_found += glob.glob(os.path.join(folder_path, "**", ext), recursive=True)
+
+    result = []
+    for filepath in files_found:
+        filename = os.path.basename(filepath)
+        thumb = generate_image_thumbnail(filepath) if is_image(filepath) else generate_thumbnail(filepath)
+        result.append({"filepath": filepath, "filename": filename, "thumbnail": thumb})
+
+    project_name = os.path.basename(folder_path.rstrip("/"))
+    return jsonify({"files": result, "project_name": project_name})
+
+
+@app.route("/api/import/ai-tags", methods=["POST"])
+def api_import_ai_tags():
+    data = request.get_json()
+    files = data.get("files", [])
+    existing_tags = data.get("existing_tags", [])
+
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        return jsonify({"error": "ANTHROPIC_API_KEY not set"}), 500
+
+    client = anthropic.Anthropic(api_key=api_key)
+    BATCH_SIZE = 10
+    all_results = []
+
+    for i in range(0, len(files), BATCH_SIZE):
+        batch = files[i:i + BATCH_SIZE]
+        content = []
+
+        for f in batch:
+            thumb_path = os.path.join(THUMBNAIL_DIR, f["thumbnail"]) if f.get("thumbnail") else None
+            if thumb_path and os.path.exists(thumb_path):
+                with open(thumb_path, "rb") as img_file:
+                    img_data = base64.b64encode(img_file.read()).decode("utf-8")
+                content.append({"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": img_data}})
+                content.append({"type": "text", "text": f"ファイル: {f['filepath']}"})
+            else:
+                content.append({"type": "text", "text": f"ファイル: {f['filepath']} (サムネイルなし)"})
+
+        tag_list_str = ", ".join([f"{t['name']}({t.get('category', '')})" for t in existing_tags])
+        content.append({"type": "text", "text": f"""以下の既存タグリストを参考に、各サムネイルに合うタグを推薦してください。
+既存タグ: {tag_list_str}
+
+各ファイルについて以下の形式で返してください:
+{{
+  "results": [
+    {{
+      "filepath": "...",
+      "suggested_tags": [
+        {{ "name": "タグ名", "category": "カテゴリ名", "is_new": false, "confidence": 0.9 }}
+      ]
+    }}
+  ]
+}}
+confidence は 0.0〜1.0。既存タグはis_new=false、新規提案はis_new=true。必ずJSON形式のみで返答してください。"""})
+
+        response = client.messages.create(
+            model="claude-opus-4-5",
+            max_tokens=4096,
+            system="あなたは動画編集素材のタグ付けアシスタントです。サムネイル画像を見て、素材の内容を表すタグを推薦してください。既存タグのリストを優先して使い、適切なものがなければ新規タグを提案してください。必ずJSON形式のみで返答してください。",
+            messages=[{"role": "user", "content": content}]
+        )
+
+        text = response.content[0].text.strip()
+        if "```" in text:
+            text = text.split("```")[1]
+            if text.startswith("json"):
+                text = text[4:]
+        try:
+            parsed = json.loads(text)
+            all_results.extend(parsed.get("results", []))
+        except Exception:
+            for f in batch:
+                all_results.append({"filepath": f["filepath"], "suggested_tags": []})
+
+    return jsonify({"results": all_results})
+
+
+@app.route("/api/import/confirm", methods=["POST"])
+def api_import_confirm():
+    data = request.get_json()
+    project_name = (data.get("project_name") or "").strip()
+    folder_path = (data.get("folder_path") or "").strip()
+    vimeo_url = (data.get("vimeo_url") or "").strip() or None
+    files = data.get("files", [])
+
+    if not project_name:
+        return jsonify({"error": "project_name required"}), 400
+
+    conn = get_db()
+
+    conn.execute(
+        "INSERT INTO projects (name, folder_path, vimeo_url) VALUES (?, ?, ?)",
+        (project_name, folder_path, vimeo_url)
+    )
+    project_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+
+    conn.execute(
+        "INSERT OR IGNORE INTO tags (name, category) VALUES (?, 'プロジェクト')",
+        (project_name,)
+    )
+    proj_tag = conn.execute(
+        "SELECT id FROM tags WHERE name = ? AND category = 'プロジェクト'", (project_name,)
+    ).fetchone()
+
+    imported = 0
+    for f in files:
+        filepath = f.get("filepath", "")
+        filename = f.get("filename", os.path.basename(filepath))
+        thumbnail = f.get("thumbnail")
+        approved_tags = f.get("approved_tags", [])
+
+        conn.execute(
+            "INSERT OR IGNORE INTO videos (filename, filepath, thumbnail, project_id) VALUES (?, ?, ?, ?)",
+            (filename, filepath, thumbnail, project_id)
+        )
+        conn.execute(
+            "UPDATE videos SET project_id = ? WHERE filepath = ? AND project_id IS NULL",
+            (project_id, filepath)
+        )
+        video = conn.execute("SELECT id FROM videos WHERE filepath = ?", (filepath,)).fetchone()
+        if not video:
+            continue
+        video_id = video["id"]
+
+        for tag in approved_tags:
+            tag_name = (tag.get("name") or "").strip()
+            tag_cat = (tag.get("category") or "").strip() or None
+            if not tag_name:
+                continue
+            conn.execute("INSERT OR IGNORE INTO tags (name, category) VALUES (?, ?)", (tag_name, tag_cat))
+            tag_row = conn.execute("SELECT id FROM tags WHERE name = ?", (tag_name,)).fetchone()
+            conn.execute(
+                "INSERT OR IGNORE INTO video_tags (video_id, tag_id) VALUES (?, ?)",
+                (video_id, tag_row["id"])
+            )
+
+        if proj_tag:
+            conn.execute(
+                "INSERT OR IGNORE INTO video_tags (video_id, tag_id) VALUES (?, ?)",
+                (video_id, proj_tag["id"])
+            )
+
+        imported += 1
+
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True, "project_id": project_id, "imported": imported})
+
+
 if __name__ == "__main__":
     init_db()
-    app.run(debug=True, port=5000)
+    app.run(host='0.0.0.0', debug=True, port=5000)

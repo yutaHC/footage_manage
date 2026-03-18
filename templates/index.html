@@ -57,6 +57,21 @@
       border-radius: 99px;
       border: 1px solid var(--border);
     }
+    .helper-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: .75rem;
+      padding: 3px 10px;
+      border-radius: 99px;
+      border: 1px solid var(--border);
+      background: var(--surface2);
+      cursor: default;
+      white-space: nowrap;
+    }
+    .helper-badge.ok   { border-color: #166534; color: #4ade80; }
+    .helper-badge.ng   { border-color: #7f1d1d; color: #fca5a5; cursor: pointer; }
+    .helper-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
 
     /* ─── Toolbar ─── */
     .toolbar {
@@ -215,7 +230,7 @@
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: 14px;
-      width: min(480px, 95vw);
+      width: min(540px, 95vw);
       overflow: hidden;
     }
     .tag-modal-header {
@@ -379,24 +394,34 @@
       z-index: 1000;
       align-items: center;
       justify-content: center;
+      padding: 20px;
     }
     .vmodal-backdrop.open { display: flex; }
     .vmodal {
       position: relative;
-      width: min(900px, 95vw);
+      width: min(1140px, 95vw);
+      display: flex;
+      background: var(--surface);
+      border-radius: 14px;
+      overflow: hidden;
+      max-height: 88vh;
     }
-    .vmodal video {
+    .vmodal-media {
+      flex: 0 0 62%;
+      background: #000;
+      display: flex;
+      flex-direction: column;
+    }
+    .vmodal-media video {
       width: 100%;
-      border-radius: 10px;
       background: #000;
       display: block;
     }
     .vmodal-title {
-      color: #e2e8f0;
-      font-size: .9rem;
-      margin-top: 10px;
+      color: var(--muted);
+      font-size: .78rem;
+      padding: 8px 12px;
       text-align: center;
-      opacity: .7;
     }
     .vmodal-loader {
       aspect-ratio: 16/9;
@@ -406,7 +431,6 @@
       justify-content: center;
       gap: 16px;
       background: #000;
-      border-radius: 10px;
     }
     .vmodal-spinner {
       width: 44px; height: 44px;
@@ -422,20 +446,88 @@
     }
     .vmodal-close {
       position: absolute;
-      top: -14px; right: -14px;
-      width: 32px; height: 32px;
+      top: 10px; right: 10px;
+      width: 30px; height: 30px;
       border-radius: 50%;
-      background: #334155;
+      background: rgba(0,0,0,.5);
       border: none;
       color: #fff;
-      font-size: 1rem;
+      font-size: .9rem;
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
       transition: background .15s;
+      z-index: 10;
     }
     .vmodal-close:hover { background: #ef4444; }
+
+    /* ─── Modal Info Panel ─── */
+    .vmodal-panel {
+      flex: 1;
+      background: var(--surface2);
+      padding: 18px 16px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      min-width: 0;
+    }
+    .vmodal-panel-title {
+      font-size: .9rem;
+      font-weight: 600;
+      word-break: break-all;
+      line-height: 1.4;
+    }
+    .vmodal-panel-label {
+      font-size: .68rem;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: var(--muted);
+      margin-bottom: 5px;
+    }
+    .panel-input {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      color: var(--text);
+      padding: 6px 10px;
+      font-size: .82rem;
+      width: 100%;
+      outline: none;
+    }
+    .panel-input:focus { border-color: var(--accent); }
+    .panel-input::placeholder { color: var(--muted); }
+    .panel-tag-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 9px;
+      border-radius: 99px;
+      font-size: .75rem;
+      cursor: default;
+    }
+    .panel-tag-pill button {
+      background: none;
+      border: none;
+      color: inherit;
+      cursor: pointer;
+      padding: 0;
+      line-height: 1;
+      opacity: .6;
+      font-size: .85rem;
+    }
+    .panel-tag-pill button:hover { opacity: 1; }
+    .panel-picker-pill {
+      padding: 3px 9px;
+      border-radius: 99px;
+      font-size: .75rem;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: opacity .1s;
+    }
+    .panel-picker-pill:hover { opacity: .8; }
+    .panel-picker-pill.applied { opacity: .5; border-color: rgba(255,255,255,.4); }
 
     /* カード本文 */
     .vcard-body {
@@ -527,6 +619,24 @@
       flex-wrap: wrap;
       gap: 5px;
     }
+    .path-toast {
+      position: fixed;
+      bottom: 28px;
+      right: 24px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 16px;
+      box-shadow: 0 8px 32px rgba(0,0,0,.5);
+      z-index: 300;
+      max-width: 480px;
+      display: none;
+    }
+    .path-toast.open { display: block; }
+    .path-toast-label { font-size: .68rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 6px; }
+    .path-toast-text { font-size: .8rem; color: var(--text); word-break: break-all; margin-bottom: 8px; }
+    .path-toast-actions { display: flex; gap: 6px; }
+
     .type-btn {
       padding: 4px 12px;
       font-size: .78rem;
@@ -577,7 +687,12 @@
   <span style="font-size:1.3rem;">🎬</span>
   <h1>Footage Manager</h1>
   <span class="badge-count">{{ video_list|length }} 件</span>
-  <div style="margin-left:auto; display:flex; gap:8px;">
+  <div style="margin-left:auto; display:flex; gap:8px; align-items:center;">
+    <span class="helper-badge" id="helper-badge" title="MediaHelper">
+      <span class="helper-dot"></span>
+      <span id="helper-badge-text">確認中...</span>
+    </span>
+    <a href="/import" class="btn-ghost" style="border-color:#0e4a5a;color:#67e8f9;">＋ プロジェクトをインポート</a>
     <button class="btn-select-mode" id="select-mode-btn" onclick="toggleSelectMode()">☑ 複数選択</button>
     <button type="button" class="btn-ghost" style="border-color:#7f1d1d;color:#fca5a5;" onclick="deleteUntagged()">🗑 タグなし削除</button>
     <button class="btn-ghost" onclick="openGroupModal()">⚙ グループ管理</button>
@@ -587,18 +702,6 @@
 
 <!-- ─── Toolbar ─── -->
 <div class="toolbar">
-  <!-- スキャン -->
-  <form action="/scan" method="POST" style="display:flex; gap:8px; align-items:flex-end;">
-    <div>
-      <label>フォルダスキャン</label>
-      <div style="display:flex; gap:6px;">
-        <input type="text" name="folder_path" id="folder-path-input" placeholder="/Users/yourname/Videos" style="width:260px;" required>
-        <button type="button" class="btn-ghost" onclick="browseFolder()">📂 選択</button>
-      </div>
-    </div>
-    <button type="submit" class="btn-accent">スキャン</button>
-  </form>
-
   <form action="/rescan_thumbnails" method="POST">
     <button type="submit" class="btn-ghost" title="サムネ未取得の動画を再スキャン">🔄 サムネ再取得</button>
   </form>
@@ -619,6 +722,20 @@
         <button type="button" class="type-btn" data-type="image" onclick="setTypeFilter('image')">🖼 静止画</button>
       </div>
     </div>
+    {% if projects is defined and projects %}
+    <div>
+      <label>プロジェクト</label>
+      <select name="project_id" onchange="this.closest('form').submit()"
+              style="background:var(--surface2); border:1px solid var(--border); border-radius:8px; color:var(--text); padding:7px 10px; font-size:.85rem; outline:none; cursor:pointer;">
+        <option value="">すべて</option>
+        {% for proj in projects %}
+        <option value="{{ proj.id }}" {% if selected_project_id is defined and selected_project_id == proj.id %}selected{% endif %}>
+          {{ proj.name }}
+        </option>
+        {% endfor %}
+      </select>
+    </div>
+    {% endif %}
     <div>
       <label>タグ絞り込み</label>
       <input type="text" id="tag-search-input" placeholder="タグを検索..." style="width:140px; margin-bottom:6px; display:block;"
@@ -758,13 +875,23 @@
       <button class="vmodal-close" style="position:static;" onclick="closeTagModal(null)">✕</button>
     </div>
     <div class="tag-modal-body" id="tag-modal-body"></div>
-    <div class="tag-modal-footer">
+    <div class="tag-modal-footer" id="tag-modal-footer">
       <div style="display:flex; flex-direction:column; gap:6px; flex:1;">
         <input type="text" id="tag-custom-input" placeholder="タグ名（カンマ区切りで複数可）">
         <input type="text" id="tag-group-input" placeholder="グループ名（任意）例: 場面, 演出">
       </div>
       <button class="btn-accent" onclick="addCustomTags()">追加</button>
     </div>
+  </div>
+</div>
+
+<!-- Path Toast -->
+<div class="path-toast" id="path-toast">
+  <div class="path-toast-label">📂 保存場所</div>
+  <div class="path-toast-text" id="path-toast-text"></div>
+  <div class="path-toast-actions">
+    <button type="button" class="btn-accent" style="font-size:.75rem;padding:4px 12px;" onclick="copyPath()">コピー</button>
+    <button type="button" class="btn-ghost" style="font-size:.75rem;padding:4px 10px;" onclick="document.getElementById('path-toast').classList.remove('open')">閉じる</button>
   </div>
 </div>
 
@@ -786,13 +913,20 @@
 <div class="vmodal-backdrop" id="vmodal-backdrop" onclick="closePlayer(event)">
   <div class="vmodal">
     <button class="vmodal-close" onclick="closePlayer(null)">✕</button>
-    <div class="vmodal-loader" id="vmodal-loader">
-      <div class="vmodal-spinner"></div>
-      <div class="vmodal-loader-text">変換中...</div>
+    <!-- Left: media -->
+    <div class="vmodal-media">
+      <div class="vmodal-loader" id="vmodal-loader">
+        <div class="vmodal-spinner"></div>
+        <div class="vmodal-loader-text">変換中...</div>
+      </div>
+      <video id="vmodal-video" controls playsinline style="display:none;"></video>
+      <img id="vmodal-image" style="display:none; width:100%; background:#000;" alt="">
+      <div class="vmodal-title" id="vmodal-title"></div>
     </div>
-    <video id="vmodal-video" controls playsinline style="display:none;"></video>
-    <img id="vmodal-image" style="display:none; width:100%; border-radius:10px; background:#000;" alt="">
-    <div class="vmodal-title" id="vmodal-title"></div>
+    <!-- Right: info panel -->
+    <div class="vmodal-panel" id="vmodal-panel">
+      <div style="color:var(--muted);font-size:.85rem;">読み込み中...</div>
+    </div>
   </div>
 </div>
 
@@ -818,7 +952,31 @@
   // 初期状態は「すべて」をアクティブに
   document.addEventListener('DOMContentLoaded', () => {
     document.querySelector('.type-btn[data-type="all"]').classList.add('active');
+    checkHelperStatus();
   });
+
+  async function checkHelperStatus() {
+    const badge = document.getElementById('helper-badge');
+    const label = document.getElementById('helper-badge-text');
+    try {
+      const res = await fetch('http://127.0.0.1:19876/ping', {
+        signal: AbortSignal.timeout(1500)
+      });
+      const data = await res.json();
+      if (data.status === 'ok') {
+        badge.className = 'helper-badge ok';
+        label.textContent = 'MediaHelper 稼働中';
+        badge.onclick = null;
+        return;
+      }
+    } catch (e) {}
+    badge.className = 'helper-badge ng';
+    label.textContent = 'MediaHelper 未起動';
+    badge.title = 'クリックでパスのコピーにフォールバックします';
+    badge.onclick = () => {
+      alert('MediaHelperが起動していません。\ninstall.shを実行してセットアップしてください。\n（media_helper/install.sh）');
+    };
+  }
 
   function setMode(mode) {
     document.querySelectorAll('input[name="mode"]').forEach(r => r.checked = (r.value === mode));
@@ -891,7 +1049,20 @@
     currentTagModalVideoId = null; // bulkモード
     document.getElementById('tag-modal-title').textContent = `${selectedIds.size}件にタグを追加`;
     document.getElementById('tag-custom-input').value = '';
-    buildModalBody(new Set()); // 選択状態なしで表示
+    document.getElementById('tag-modal-footer').style.display = '';
+    buildModalBody(new Set());
+    // URL設定セクションを末尾に追加
+    const body = document.getElementById('tag-modal-body');
+    const urlSec = document.createElement('div');
+    urlSec.style.cssText = 'border-top:1px solid var(--border);margin-top:14px;padding-top:14px;';
+    urlSec.innerHTML = `
+      <div class="vmodal-panel-label" style="margin-bottom:6px;">完成動画URLを一括設定</div>
+      <div style="display:flex;gap:6px;">
+        <input type="text" id="bulk-url-input" class="panel-input" placeholder="https://vimeo.com/..." style="flex:1;">
+        <button class="btn-ghost" style="font-size:.75rem;padding:5px 10px;white-space:nowrap;"
+                onclick="saveBulkUrl()">設定</button>
+      </div>`;
+    body.appendChild(urlSec);
     document.getElementById('tag-modal-backdrop').classList.add('open');
   }
 
@@ -966,24 +1137,14 @@
   // ─── タグモーダル ───
   let currentTagModalVideoId = null;
 
-  function openTagModal(videoId, filename) {
+  async function openTagModal(videoId, filename) {
     currentTagModalVideoId = videoId;
     document.getElementById('tag-modal-title').textContent = filename;
-    document.getElementById('tag-custom-input').value = '';
-
-    // 現在のタグIDを収集
-    const appliedIds = Array.from(
-      document.getElementById('tag-list-' + videoId).querySelectorAll('.tag-pill')
-    ).map(el => parseInt(el.dataset.tagId)).filter(Boolean);
-
-    // カードから現在のタグIDを取得（data属性なしの場合はテキストで照合）
-    const currentNames = new Set(
-      Array.from(document.getElementById('tag-list-' + videoId).querySelectorAll('.tag-pill'))
-        .map(el => el.textContent.replace('×','').trim())
-    );
-
-    buildModalBody(currentNames);
+    document.getElementById('tag-modal-footer').style.display = 'none';
+    const body = document.getElementById('tag-modal-body');
+    body.innerHTML = '<div style="color:var(--muted);padding:8px 0;font-size:.85rem;">読み込み中...</div>';
     document.getElementById('tag-modal-backdrop').classList.add('open');
+    await loadVideoInfo(videoId, body);
   }
 
   function buildModalBody(appliedNames) {
@@ -1250,7 +1411,6 @@
     const loaderText = loader.querySelector('.vmodal-loader-text');
     const title = document.getElementById('vmodal-title');
 
-    // 前回のイベントをリセット
     video.pause();
     video.removeAttribute('src');
     video.load();
@@ -1258,6 +1418,7 @@
     loader.style.display = 'flex';
     loaderText.textContent = '変換中...';
     video.style.display = 'none';
+    document.getElementById('vmodal-image').style.display = 'none';
     title.textContent = filename;
     backdrop.classList.add('open');
 
@@ -1273,9 +1434,9 @@
     video.addEventListener('canplay', onReady, { once: true });
     video.addEventListener('error', onError, { once: true });
 
-    // srcをセットしてロード開始
     video.src = '/video/' + videoId + '/stream';
     video.load();
+    loadVideoInfo(videoId);
   }
 
   function openImageViewer(videoId, filename) {
@@ -1289,6 +1450,254 @@
     img.style.display = 'block';
     img.src = '/video/' + videoId + '/stream';
     backdrop.classList.add('open');
+    loadVideoInfo(videoId);
+  }
+
+  // ─── Info Panel ───
+  function esc(str) {
+    if (!str) return '';
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  async function loadVideoInfo(videoId, container = null) {
+    const panel = container || document.getElementById('vmodal-panel');
+    panel.innerHTML = '<div style="color:var(--muted);font-size:.85rem;padding:4px 0;">読み込み中...</div>';
+    try {
+      const resp = await fetch(`/api/video/${videoId}/info`);
+      const data = await resp.json();
+      renderModalPanel(videoId, data, container);
+    } catch(e) {
+      panel.innerHTML = '<div style="color:var(--muted);">情報を取得できませんでした</div>';
+    }
+  }
+
+  function renderModalPanel(videoId, info, container = null) {
+    const panel = container || document.getElementById('vmodal-panel');
+
+    let projectHtml = '';
+    if (info.project_name) {
+      const vimeoLink = info.vimeo_url
+        ? `<a href="${esc(info.vimeo_url)}" target="_blank" style="font-size:.75rem;color:var(--accent);display:block;margin-top:4px;">▶ 完成動画を見る</a>`
+        : '';
+      projectHtml = `
+        <div>
+          <div class="vmodal-panel-label">プロジェクト</div>
+          <div style="font-size:.85rem;color:var(--accent2);margin-bottom:6px;">${esc(info.project_name)}</div>
+          <div style="display:flex;gap:6px;align-items:center;">
+            <input type="text" id="panel-vimeo-input" class="panel-input" placeholder="Vimeo URL"
+                   value="${esc(info.vimeo_url || '')}" style="flex:1;">
+            <button class="btn-ghost" style="font-size:.75rem;padding:5px 10px;white-space:nowrap;"
+                    onclick="saveVimeoUrl(${info.project_id})">保存</button>
+          </div>
+          ${vimeoLink}
+        </div>`;
+    }
+
+    const finalUrlLink = info.final_url
+      ? `<a href="${esc(info.final_url)}" target="_blank" style="font-size:.75rem;color:var(--accent);display:block;margin-top:4px;">▶ 完成動画を見る</a>`
+      : '';
+
+    panel.innerHTML = `
+      <div class="vmodal-panel-title">${esc(info.filename)}</div>
+      ${projectHtml}
+      <div>
+        <div class="vmodal-panel-label">完成動画URL</div>
+        <div style="display:flex;gap:6px;align-items:center;">
+          <input type="text" id="panel-final-url-input" class="panel-input" placeholder="https://vimeo.com/..."
+                 value="${esc(info.final_url || '')}" style="flex:1;">
+          <button class="btn-ghost" style="font-size:.75rem;padding:5px 10px;white-space:nowrap;"
+                  onclick="saveFinalUrl(${info.id})">保存</button>
+        </div>
+        ${finalUrlLink}
+      </div>
+      <div>
+        <div class="vmodal-panel-label">タグ</div>
+        <div id="panel-tags-list" style="display:flex;flex-wrap:wrap;gap:5px;min-height:24px;"></div>
+      </div>
+      <div>
+        <div class="vmodal-panel-label">タグを追加</div>
+        <input type="text" id="panel-tag-search" class="panel-input" placeholder="タグを検索..."
+               oninput="filterPanelPills(this.value)" style="margin-bottom:8px;">
+        <div id="panel-pills-container" style="max-height:220px;overflow-y:auto;"></div>
+        <div style="display:flex;gap:5px;margin-top:10px;">
+          <input type="text" id="panel-custom-tag" class="panel-input" placeholder="カスタムタグ (カンマ区切り)" style="flex:1;">
+          <input type="text" id="panel-custom-group" class="panel-input" placeholder="グループ" style="width:80px;">
+          <button class="btn-ghost" style="font-size:.75rem;padding:5px 10px;white-space:nowrap;"
+                  onclick="addPanelCustomTag(${videoId})">追加</button>
+        </div>
+      </div>
+    `;
+
+    const appliedNames = new Set(info.tags.map(t => t.name));
+    renderPanelTags(videoId, info.tags);
+    buildPanelPills(videoId, appliedNames);
+  }
+
+  function renderPanelTags(videoId, tags) {
+    const list = document.getElementById('panel-tags-list');
+    if (!list) return;
+    list.innerHTML = '';
+    if (!tags.length) {
+      list.innerHTML = '<span style="color:var(--muted);font-size:.8rem;">タグなし</span>';
+      return;
+    }
+    tags.forEach(tag => {
+      const c = CAT_COLORS[tag.category] || DEFAULT_CAT_COLOR;
+      const pill = document.createElement('span');
+      pill.className = 'panel-tag-pill';
+      pill.style.cssText = `background:${c.bg};color:${c.text};`;
+      pill.innerHTML = `${esc(tag.name)}<button onclick="removePanelTag(${videoId},${tag.id})">×</button>`;
+      list.appendChild(pill);
+    });
+  }
+
+  async function removePanelTag(videoId, tagId) {
+    const res = await fetch(`/api/video/${videoId}/tag/remove`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({tag_id: tagId})
+    });
+    const data = await res.json();
+    renderPanelTags(videoId, data.tags);
+    renderTagList(videoId, data.tags);
+    buildPanelPills(videoId, new Set(data.tags.map(t => t.name)));
+  }
+
+  function buildPanelPills(videoId, appliedNames) {
+    const container = document.getElementById('panel-pills-container');
+    if (!container) return;
+    container.innerHTML = '';
+
+    const groups = {};
+    ALL_TAGS.forEach(([id, name, cat]) => {
+      const key = cat || '';
+      if (!groups[key]) groups[key] = [];
+      groups[key].push([id, name, cat]);
+    });
+    const sorted = Object.entries(groups).sort(([a],[b]) => {
+      if (!a) return 1; if (!b) return -1;
+      return a.localeCompare(b);
+    });
+
+    sorted.forEach(([key, tags]) => {
+      const sec = document.createElement('div');
+      sec.style.marginBottom = '8px';
+      const label = document.createElement('div');
+      label.style.cssText = 'font-size:.65rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;';
+      label.textContent = key || 'グループなし';
+      sec.appendChild(label);
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;flex-wrap:wrap;gap:4px;';
+      tags.forEach(([id, name, cat]) => {
+        const c = CAT_COLORS[cat] || DEFAULT_CAT_COLOR;
+        const btn = document.createElement('button');
+        btn.className = 'panel-picker-pill' + (appliedNames.has(name) ? ' applied' : '');
+        btn.style.cssText = `background:${c.bg};color:${c.text};`;
+        btn.textContent = (appliedNames.has(name) ? '✓ ' : '') + name;
+        btn.dataset.name = name;
+        btn.onclick = async () => {
+          const isApplied = appliedNames.has(name);
+          const endpoint = isApplied ? 'remove' : 'add';
+          const res = await fetch(`/api/video/${videoId}/tag/${endpoint}`, {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({tag_id: id})
+          });
+          const data = await res.json();
+          const newNames = new Set(data.tags.map(t => t.name));
+          renderPanelTags(videoId, data.tags);
+          renderTagList(videoId, data.tags);
+          buildPanelPills(videoId, newNames);
+        };
+        row.appendChild(btn);
+      });
+      sec.appendChild(row);
+      container.appendChild(sec);
+    });
+  }
+
+  function filterPanelPills(query) {
+    const q = query.trim().toLowerCase();
+    document.querySelectorAll('#panel-pills-container button').forEach(btn => {
+      btn.style.display = (!q || btn.dataset.name.toLowerCase().includes(q)) ? '' : 'none';
+    });
+  }
+
+  async function addPanelCustomTag(videoId) {
+    const tagInput = document.getElementById('panel-custom-tag');
+    const groupInput = document.getElementById('panel-custom-group');
+    const val = tagInput.value.trim();
+    const group = groupInput.value.trim() || null;
+    if (!val) return;
+
+    const names = val.split(',').map(n => n.trim()).filter(Boolean);
+    let lastTags = [];
+    for (const name of names) {
+      const res = await fetch(`/api/video/${videoId}/tag/add`, {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({custom_tag: name, custom_group: group})
+      });
+      const data = await res.json();
+      lastTags = data.tags;
+    }
+    tagInput.value = '';
+    renderPanelTags(videoId, lastTags);
+    renderTagList(videoId, lastTags);
+    // ALL_TAGS更新のためページリロードが必要な場合のみ（新規タグの場合）
+    // タグピッカーはページリロード後に正しく反映される
+    buildPanelPills(videoId, new Set(lastTags.map(t => t.name)));
+  }
+
+  async function saveFinalUrl(videoId) {
+    const input = document.getElementById('panel-final-url-input');
+    const url = input.value.trim();
+    const res = await fetch(`/api/video/${videoId}/url`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({final_url: url})
+    });
+    if (res.ok) {
+      const btn = input.nextElementSibling;
+      btn.textContent = '✓ 保存済み';
+      setTimeout(() => { btn.textContent = '保存'; }, 2000);
+    }
+  }
+
+  async function saveBulkUrl() {
+    const input = document.getElementById('bulk-url-input');
+    const url = input.value.trim();
+    const res = await fetch('/api/bulk/url', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({video_ids: [...selectedIds], final_url: url})
+    });
+    if (res.ok) {
+      const btn = input.nextElementSibling;
+      btn.textContent = '✓ 設定済み';
+      setTimeout(() => { btn.textContent = '設定'; }, 2000);
+    }
+  }
+
+  async function saveVimeoUrl(projectId) {
+    const input = document.getElementById('panel-vimeo-input');
+    const url = input.value.trim();
+    const res = await fetch(`/api/project/${projectId}/vimeo`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({vimeo_url: url})
+    });
+    if (res.ok) {
+      const btn = input.nextElementSibling;
+      const orig = btn.textContent;
+      btn.textContent = '✓ 保存済み';
+      setTimeout(() => { btn.textContent = orig; }, 2000);
+      // リンク行を更新
+      const linkEl = input.closest('div').parentElement.querySelector('a');
+      if (url && linkEl) { linkEl.href = url; linkEl.style.display = ''; }
+      else if (!url && linkEl) { linkEl.style.display = 'none'; }
+      else if (url && !linkEl) {
+        const a = document.createElement('a');
+        a.href = url; a.target = '_blank';
+        a.style.cssText = 'font-size:.75rem;color:var(--accent);display:block;margin-top:4px;';
+        a.textContent = '▶ 完成動画を見る';
+        input.closest('div').parentElement.appendChild(a);
+      }
+    }
   }
 
   function closePlayer(event) {
@@ -1351,8 +1760,40 @@
     form.submit();
   }
 
+  let currentMacPath = '';
+
   async function revealInFinder(videoId) {
-    await fetch(`/api/video/${videoId}/reveal`, { method: 'POST' });
+    const res = await fetch(`/api/video/${videoId}/reveal`, { method: 'POST' });
+    const data = await res.json();
+    if (!data.mac_path) return;
+    currentMacPath = data.mac_path;
+
+    // 1. MediaHelperの死活確認
+    let helperOk = false;
+    try {
+      const ping = await fetch('http://127.0.0.1:19876/ping', {
+        signal: AbortSignal.timeout(1000)
+      });
+      helperOk = (await ping.json()).status === 'ok';
+    } catch (e) {}
+
+    if (!helperOk) {
+      // ヘルパー未起動 → パスをトーストで表示
+      document.getElementById('path-toast-text').textContent = currentMacPath;
+      document.getElementById('path-toast').classList.add('open');
+      return;
+    }
+
+    // 2. Finderで開く
+    await fetch('http://127.0.0.1:19876/open?path=' + encodeURIComponent(currentMacPath));
+  }
+
+  function copyPath() {
+    navigator.clipboard.writeText(currentMacPath).then(() => {
+      const btn = document.querySelector('#path-toast .btn-accent');
+      btn.textContent = 'コピー済み ✓';
+      setTimeout(() => { btn.textContent = 'コピー'; }, 2000);
+    });
   }
 
   document.addEventListener('keydown', (e) => {
