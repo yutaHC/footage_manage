@@ -688,6 +688,11 @@
   <h1>Footage Manager</h1>
   <span class="badge-count">{{ video_list|length }} 件</span>
   <div style="margin-left:auto; display:flex; gap:8px; align-items:center;">
+    <button id="missing-badge" onclick="openRemapModal()"
+      style="display:none; background:#7f1d1d; color:#fca5a5; border:1px solid #991b1b;
+             border-radius:99px; padding:3px 12px; font-size:.78rem; cursor:pointer; white-space:nowrap;">
+      ⚠️ <span id="missing-count">0</span>件 行方不明
+    </button>
     <span class="helper-badge" id="helper-badge" title="MediaHelper">
       <span class="helper-dot"></span>
       <span id="helper-badge-text">確認中...</span>
@@ -722,20 +727,6 @@
         <button type="button" class="type-btn" data-type="image" onclick="setTypeFilter('image')">🖼 静止画</button>
       </div>
     </div>
-    {% if projects is defined and projects %}
-    <div>
-      <label>プロジェクト</label>
-      <select name="project_id" onchange="this.closest('form').submit()"
-              style="background:var(--surface2); border:1px solid var(--border); border-radius:8px; color:var(--text); padding:7px 10px; font-size:.85rem; outline:none; cursor:pointer;">
-        <option value="">すべて</option>
-        {% for proj in projects %}
-        <option value="{{ proj.id }}" {% if selected_project_id is defined and selected_project_id == proj.id %}selected{% endif %}>
-          {{ proj.name }}
-        </option>
-        {% endfor %}
-      </select>
-    </div>
-    {% endif %}
     <div>
       <label>タグ絞り込み</label>
       <input type="text" id="tag-search-input" placeholder="タグを検索..." style="width:140px; margin-bottom:6px; display:block;"
@@ -930,6 +921,59 @@
   </div>
 </div>
 
+<!-- ─── 再マッピングモーダル ─── -->
+<div id="remap-backdrop" onclick="closeRemapModal(event)"
+  style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.85);
+         z-index:200; align-items:center; justify-content:center; padding:20px;">
+  <div onclick="event.stopPropagation()"
+    style="background:var(--surface); border:1px solid var(--border); border-radius:14px;
+           width:min(560px,95vw); overflow:hidden;">
+
+    <div style="display:flex; justify-content:space-between; align-items:center;
+      padding:14px 18px; border-bottom:1px solid var(--border); font-weight:600;">
+      ⚠️ 行方不明ファイル
+      <button onclick="closeRemapModal(null)" style="background:none;border:none;
+        color:var(--muted);font-size:1.2rem;cursor:pointer;">✕</button>
+    </div>
+
+    <div style="padding:16px 18px; display:flex; flex-direction:column; gap:14px;">
+      <div style="color:var(--muted); font-size:.85rem;">
+        <span id="remap-missing-count" style="color:var(--text); font-weight:600;">0</span>件のファイルが見つかりません。
+        移動先のプレフィックスを入力して一括更新できます。
+      </div>
+
+      <div>
+        <label style="font-size:.72rem; color:var(--muted); text-transform:uppercase;
+          letter-spacing:.05em; display:block; margin-bottom:4px;">旧パス（プレフィックス）</label>
+        <input id="remap-old-prefix" type="text" placeholder="/Volumes/NAS/CREATIVE"
+          style="width:100%; background:var(--surface2); border:1px solid var(--border);
+            color:var(--text); border-radius:6px; padding:6px 10px; font-size:.85rem; outline:none; box-sizing:border-box;">
+      </div>
+
+      <div>
+        <label style="font-size:.72rem; color:var(--muted); text-transform:uppercase;
+          letter-spacing:.05em; display:block; margin-bottom:4px;">新パス（プレフィックス）</label>
+        <div style="display:flex; gap:6px;">
+          <input id="remap-new-prefix" type="text" placeholder="/Volumes/ExternalHDD/CREATIVE"
+            style="flex:1; background:var(--surface2); border:1px solid var(--border);
+              color:var(--text); border-radius:6px; padding:6px 10px; font-size:.85rem; outline:none;">
+          <button class="btn-ghost" onclick="browseNewPrefix()">📂 選択</button>
+        </div>
+      </div>
+
+      <div id="remap-preview-area" style="display:none; background:var(--surface2);
+        border-radius:8px; padding:10px 12px; font-size:.8rem; color:var(--muted);">
+      </div>
+    </div>
+
+    <div style="display:flex; gap:8px; padding:12px 18px; border-top:1px solid var(--border);">
+      <button class="btn-ghost" onclick="previewRemap()">プレビュー</button>
+      <button id="remap-apply-btn" class="btn-accent" style="display:none;" onclick="applyRemap()">適用する</button>
+      <button class="btn-ghost" style="margin-left:auto;" onclick="closeRemapModal(null)">キャンセル</button>
+    </div>
+  </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
   const IMAGE_EXTS = new Set(['jpg','jpeg','png','ai']);
@@ -953,6 +997,7 @@
   document.addEventListener('DOMContentLoaded', () => {
     document.querySelector('.type-btn[data-type="all"]').classList.add('active');
     checkHelperStatus();
+    checkMissingFiles();
   });
 
   async function checkHelperStatus() {
@@ -992,13 +1037,6 @@
     });
   }
 
-  async function browseFolder() {
-    const res = await fetch('/browse');
-    const data = await res.json();
-    if (data.path) {
-      document.getElementById('folder-path-input').value = data.path;
-    }
-  }
 
   // ─── 選択モード ───
   let selectMode = false;
@@ -1250,8 +1288,10 @@
   function renderGroupModal() {
     const body = document.getElementById('group-modal-body');
     body.innerHTML = '';
-    // サーバーデータからグループ別に構築
+    // サーバーデータからグループ別に構築（空グループも含む）
     const groups = {};
+    // CAT_COLORSに登録されている空グループも先に追加
+    Object.keys(CAT_COLORS).forEach(key => { if (!groups[key]) groups[key] = []; });
     ALL_TAGS.forEach(([id, name, cat]) => {
       const key = cat || '';
       if (!groups[key]) groups[key] = [];
@@ -1392,10 +1432,12 @@
     const input = document.getElementById('new-group-input');
     const name = input.value.trim();
     if (!name) return;
-    // グループだけ追加（タグなし）→ タグを1つ追加してカテゴリを設定する必要はない
-    // ここではモーダルの表示上に追加するだけ（タグを追加したときに自動作成）
-    alert(`グループ「${name}」はタグを追加するときに自動で作成されます。\nタグモーダルの自由入力欄でグループ名を指定してください。`);
+    await fetch('/api/category/create', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({name})
+    });
     input.value = '';
+    location.reload();
   }
 
   function closeTagModal(event) {
@@ -1515,7 +1557,12 @@
         <div id="panel-tags-list" style="display:flex;flex-wrap:wrap;gap:5px;min-height:24px;"></div>
       </div>
       <div>
-        <div class="vmodal-panel-label">タグを追加</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+          <div class="vmodal-panel-label" style="margin-bottom:0;">タグを追加</div>
+          <button class="btn-ghost" id="panel-ai-btn" style="font-size:.72rem;padding:4px 10px;"
+                  onclick="generateAiTags(${videoId})">✨ AIタグを生成</button>
+        </div>
+        <div id="panel-ai-suggestions" style="display:none;margin-bottom:10px;"></div>
         <input type="text" id="panel-tag-search" class="panel-input" placeholder="タグを検索..."
                oninput="filterPanelPills(this.value)" style="margin-bottom:8px;">
         <div id="panel-pills-container" style="max-height:220px;overflow-y:auto;"></div>
@@ -1660,6 +1707,65 @@
     }
   }
 
+  async function generateAiTags(videoId) {
+    const btn = document.getElementById('panel-ai-btn');
+    const container = document.getElementById('panel-ai-suggestions');
+    if (!btn || !container) return;
+    btn.disabled = true;
+    btn.textContent = '解析中...';
+    container.style.display = '';
+    container.innerHTML = '<span style="color:var(--muted);font-size:.8rem;">AIが解析中...</span>';
+
+    try {
+      const resp = await fetch(`/api/video/${videoId}/ai-tags`, {method: 'POST'});
+      const data = await resp.json();
+      if (data.error) { container.innerHTML = `<span style="color:#f87171;font-size:.8rem;">${data.error}</span>`; return; }
+
+      const tags = data.suggested_tags || [];
+      if (!tags.length) {
+        container.innerHTML = '<span style="color:var(--muted);font-size:.8rem;">推薦タグなし</span>';
+        return;
+      }
+
+      container.innerHTML = '';
+      const label = document.createElement('div');
+      label.style.cssText = 'font-size:.68rem;color:var(--muted);margin-bottom:5px;';
+      label.textContent = 'AI推薦タグ（クリックで追加）';
+      container.appendChild(label);
+
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;flex-wrap:wrap;gap:5px;';
+      tags.forEach(tag => {
+        const c = CAT_COLORS[tag.category] || DEFAULT_CAT_COLOR;
+        const btn = document.createElement('button');
+        btn.className = 'panel-picker-pill';
+        btn.style.cssText = `background:${c.bg};color:${c.text};border:${tag.is_new ? '1px dashed rgba(255,255,255,.4)' : 'none'};`;
+        btn.title = `confidence: ${Math.round(tag.confidence * 100)}%${tag.is_new ? ' [新規]' : ''}`;
+        btn.textContent = (tag.is_new ? '＋' : '') + tag.name;
+        btn.onclick = async () => {
+          btn.disabled = true;
+          const res = await fetch(`/api/video/${videoId}/tag/add`, {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({custom_tag: tag.name, custom_group: tag.category || null})
+          });
+          const d = await res.json();
+          btn.style.opacity = '.3';
+          btn.textContent = '✓ ' + tag.name;
+          renderPanelTags(videoId, d.tags);
+          renderTagList(videoId, d.tags);
+          buildPanelPills(videoId, new Set(d.tags.map(t => t.name)));
+        };
+        row.appendChild(btn);
+      });
+      container.appendChild(row);
+    } catch(e) {
+      container.innerHTML = '<span style="color:#f87171;font-size:.8rem;">エラーが発生しました</span>';
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '✨ AIタグを生成';
+    }
+  }
+
   async function saveBulkUrl() {
     const input = document.getElementById('bulk-url-input');
     const url = input.value.trim();
@@ -1801,8 +1907,126 @@
       closePlayer(null);
       closeTagModal(null);
       closeGroupModal(null);
+      closeRemapModal(null);
     }
   });
+
+  // ─── 行方不明ファイル / 再マッピング ───
+  let remapMissingFiles = [];
+
+  async function checkMissingFiles() {
+    try {
+      const res = await fetch('/api/missing_files');
+      const data = await res.json();
+      remapMissingFiles = data.files;
+      const badge = document.getElementById('missing-badge');
+      if (data.count > 0) {
+        document.getElementById('missing-count').textContent = data.count;
+        badge.style.display = '';
+      } else {
+        badge.style.display = 'none';
+      }
+    } catch (e) {}
+  }
+
+  function detectCommonPrefix(paths) {
+    if (!paths.length) return '';
+    let common = paths[0];
+    for (const p of paths.slice(1)) {
+      while (common && !p.startsWith(common)) {
+        common = common.slice(0, common.lastIndexOf('/'));
+      }
+    }
+    return common;
+  }
+
+  function openRemapModal() {
+    document.getElementById('remap-missing-count').textContent = remapMissingFiles.length;
+    const prefix = detectCommonPrefix(remapMissingFiles.map(f => f.filepath));
+    document.getElementById('remap-old-prefix').value = prefix;
+    document.getElementById('remap-new-prefix').value = '';
+    document.getElementById('remap-preview-area').style.display = 'none';
+    document.getElementById('remap-apply-btn').style.display = 'none';
+    document.getElementById('remap-backdrop').style.display = 'flex';
+  }
+
+  function closeRemapModal(event) {
+    if (event && event.target !== document.getElementById('remap-backdrop')) return;
+    document.getElementById('remap-backdrop').style.display = 'none';
+  }
+
+  async function browseNewPrefix() {
+    try {
+      const res = await fetch('http://127.0.0.1:9999/browse');
+      const data = await res.json();
+      if (data.path) {
+        document.getElementById('remap-new-prefix').value = data.path.replace(/\/$/, '');
+      }
+    } catch (e) {
+      alert('Finder Helper が起動していません（port 9999）\n手動でパスを入力してください。');
+    }
+  }
+
+  async function previewRemap() {
+    const oldP = document.getElementById('remap-old-prefix').value.trim();
+    const newP = document.getElementById('remap-new-prefix').value.trim();
+    if (!oldP || !newP) { alert('旧パスと新パスを入力してください'); return; }
+
+    const res = await fetch('/api/remap_prefix', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ old_prefix: oldP, new_prefix: newP, preview: true })
+    });
+    const data = await res.json();
+    if (data.error) { alert(data.error); return; }
+
+    const area = document.getElementById('remap-preview-area');
+    let html = `<div style="margin-bottom:8px;"><strong style="color:var(--text);">${data.count}件</strong>が更新されます</div>`;
+    if (data.examples && data.examples.length) {
+      data.examples.forEach(ex => {
+        html += `<div style="word-break:break-all; margin-bottom:6px;">
+          <span style="color:#fca5a5;">${ex.old}</span><br>
+          → <span style="color:#4ade80;">${ex.new}</span>
+        </div>`;
+      });
+      if (data.count > data.examples.length) {
+        html += `<div style="color:var(--muted);">… 他 ${data.count - data.examples.length} 件</div>`;
+      }
+    }
+    area.innerHTML = html;
+    area.style.display = '';
+    document.getElementById('remap-apply-btn').style.display = data.count > 0 ? '' : 'none';
+  }
+
+  async function applyRemap() {
+    const oldP = document.getElementById('remap-old-prefix').value.trim();
+    const newP = document.getElementById('remap-new-prefix').value.trim();
+    const count = document.getElementById('remap-missing-count').textContent;
+    if (!confirm(`${count}件のパスを更新します。よろしいですか？`)) return;
+
+    const btn = document.getElementById('remap-apply-btn');
+    btn.disabled = true;
+    btn.textContent = '更新中...';
+
+    try {
+      const res = await fetch('/api/remap_prefix', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ old_prefix: oldP, new_prefix: newP, preview: false })
+      });
+      const data = await res.json();
+      if (data.error) { alert(data.error); return; }
+      alert(`完了しました。${data.updated}件を更新しました。`);
+      document.getElementById('remap-backdrop').style.display = 'none';
+      remapMissingFiles = [];
+      document.getElementById('missing-badge').style.display = 'none';
+    } catch (e) {
+      alert('エラーが発生しました');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '適用する';
+    }
+  }
 </script>
 </body>
 </html>

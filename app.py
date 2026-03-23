@@ -10,6 +10,7 @@ import subprocess
 import hashlib
 import base64
 import json
+import re
 import anthropic
 from flask import Flask, render_template, request, redirect, url_for, send_file, abort, jsonify
 
@@ -40,15 +41,24 @@ PRESET_COLORS = {
 DEFAULT_COLOR = {"bg": "#2d1b4e", "text": "#d8b4fe"}
 
 
+def clean_tag_name(name):
+    """AIがタグ名に括弧でカテゴリを含めて返す場合に除去する"""
+    return re.sub(r'\s*\([^)]*\)\s*$', '', (name or "")).strip()
+
+
 def get_categories(conn):
-    """DBから全カテゴリを {name: {bg, text, tags:[...]}} で返す"""
-    color_rows = conn.execute("SELECT name, bg_color, text_color FROM categories").fetchall()
+    """DBから全カテゴリを {name: {bg, text, tags:[...]}} で返す（空グループも含む）"""
+    color_rows = conn.execute("SELECT name, bg_color, text_color FROM categories ORDER BY name").fetchall()
     colors = {r["name"]: {"bg": r["bg_color"], "text": r["text_color"]} for r in color_rows}
+
+    # categoriesテーブルの空グループも先に登録
+    cats = {}
+    for r in color_rows:
+        cats[r["name"]] = {"bg": r["bg_color"], "text": r["text_color"], "tags": []}
 
     tag_rows = conn.execute(
         "SELECT * FROM tags ORDER BY COALESCE(category,'zzz'), name"
     ).fetchall()
-    cats = {}
     for row in tag_rows:
         key = row["category"] or ""
         if key not in cats:
@@ -323,17 +333,6 @@ def delete_tag(tag_id):
     conn.close()
     return redirect(request.referrer or url_for("index"))
 
-
-@app.route("/browse")
-def browse():
-    result = subprocess.run([
-        "osascript", "-e",
-        'tell application "Finder" to set f to choose folder\nreturn POSIX path of f'
-    ], capture_output=True, text=True)
-    path = result.stdout.strip()
-    if path:
-        return jsonify({"path": path})
-    return jsonify({"path": None})
 
 
 @app.route("/api/bulk/tag/add", methods=["POST"])
@@ -641,6 +640,22 @@ def reveal_in_finder(video_id):
     return jsonify({"ok": True})
 
 
+@app.route("/api/category/create", methods=["POST"])
+def api_category_create():
+    data = request.get_json()
+    name = (data.get("name") or "").strip()
+    if not name:
+        return jsonify({"error": "name required"}), 400
+    conn = get_db()
+    conn.execute(
+        "INSERT OR IGNORE INTO categories (name, bg_color, text_color) VALUES (?, '#2d1b4e', '#d8b4fe')",
+        (name,)
+    )
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
+
+
 @app.route("/api/category/color", methods=["POST"])
 def api_category_color():
     data = request.get_json()
@@ -701,6 +716,78 @@ def api_tag_set_category(tag_id):
     conn.commit()
     conn.close()
     return jsonify({"ok": True})
+
+
+@app.route("/api/video/<int:video_id>/ai-tags", methods=["POST"])
+def api_video_ai_tags(video_id):
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        return jsonify({"error": "ANTHROPIC_API_KEY not set"}), 500
+
+    conn = get_db()
+    video = conn.execute("SELECT thumbnail, filepath FROM videos WHERE id = ?", (video_id,)).fetchone()
+    existing_tags = conn.execute("SELECT id, name, category FROM tags ORDER BY name").fetchall()
+    applied_tags = conn.execute("""
+        SELECT tags.name FROM tags JOIN video_tags ON tags.id = video_tags.tag_id
+        WHERE video_tags.video_id = ?
+    """, (video_id,)).fetchall()
+    conn.close()
+
+    if not video:
+        return jsonify({"error": "not found"}), 404
+
+    applied_names = {t["name"] for t in applied_tags}
+    client = anthropic.Anthropic(api_key=api_key)
+    content = []
+
+    thumb_path = os.path.join(THUMBNAIL_DIR, video["thumbnail"]) if video["thumbnail"] else None
+    if thumb_path and os.path.exists(thumb_path):
+        with open(thumb_path, "rb") as f:
+            img_data = base64.b64encode(f.read()).decode("utf-8")
+        content.append({"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": img_data}})
+    else:
+        content.append({"type": "text", "text": f"ファイル: {video['filepath']} (サムネイルなし)"})
+
+    tag_groups = {}
+    for t in existing_tags:
+        cat = t['category'] or 'グループなし'
+        tag_groups.setdefault(cat, []).append(t['name'])
+    tag_list_str = "; ".join([f"{cat}: {', '.join(names)}" for cat, names in tag_groups.items()])
+    content.append({"type": "text", "text": f"""以下の既存タグリストを参考に、このサムネイルに合うタグを推薦してください。
+既存タグ（カテゴリ: タグ名, ...の形式）: {tag_list_str}
+
+重要: nameフィールドにはタグ名のみを入れてください。カテゴリや括弧は含めないでください。
+以下の形式でJSONのみ返してください:
+{{
+  "suggested_tags": [
+    {{ "name": "タグ名のみ", "category": "カテゴリ名", "is_new": false, "confidence": 0.9 }}
+  ]
+}}
+confidence は 0.0〜1.0。既存タグはis_new=false、新規提案はis_new=true。必ずJSON形式のみで返答してください。"""})
+
+    response = client.messages.create(
+        model="claude-3-haiku-20240307",
+        max_tokens=1024,
+        system="あなたは動画編集素材のタグ付けアシスタントです。サムネイル画像を見て素材の内容を表すタグを推薦してください。必ずJSON形式のみで返答してください。",
+        messages=[{"role": "user", "content": content}]
+    )
+
+    text = response.content[0].text.strip()
+    if "```" in text:
+        text = text.split("```")[1]
+        if text.startswith("json"):
+            text = text[4:]
+    try:
+        parsed = json.loads(text)
+        tags = parsed.get("suggested_tags", [])
+        # タグ名をクリーニングして既存タグと照合
+        for t in tags:
+            t["name"] = clean_tag_name(t.get("name", ""))
+        tags = [t for t in tags if t["name"] and t["name"] not in applied_names]
+    except Exception:
+        tags = []
+
+    return jsonify({"suggested_tags": tags})
 
 
 @app.route("/api/bulk/url", methods=["POST"])
@@ -829,17 +916,22 @@ def api_import_ai_tags():
             else:
                 content.append({"type": "text", "text": f"ファイル: {f['filepath']} (サムネイルなし)"})
 
-        tag_list_str = ", ".join([f"{t['name']}({t.get('category', '')})" for t in existing_tags])
+        tag_groups = {}
+        for t in existing_tags:
+            cat = t.get('category') or 'グループなし'
+            tag_groups.setdefault(cat, []).append(t['name'])
+        tag_list_str = "; ".join([f"{cat}: {', '.join(names)}" for cat, names in tag_groups.items()])
         content.append({"type": "text", "text": f"""以下の既存タグリストを参考に、各サムネイルに合うタグを推薦してください。
-既存タグ: {tag_list_str}
+既存タグ（カテゴリ: タグ名, ...の形式）: {tag_list_str}
 
+重要: nameフィールドにはタグ名のみを入れてください。カテゴリや括弧は含めないでください。
 各ファイルについて以下の形式で返してください:
 {{
   "results": [
     {{
       "filepath": "...",
       "suggested_tags": [
-        {{ "name": "タグ名", "category": "カテゴリ名", "is_new": false, "confidence": 0.9 }}
+        {{ "name": "タグ名のみ", "category": "カテゴリ名", "is_new": false, "confidence": 0.9 }}
       ]
     }}
   ]
@@ -847,7 +939,7 @@ def api_import_ai_tags():
 confidence は 0.0〜1.0。既存タグはis_new=false、新規提案はis_new=true。必ずJSON形式のみで返答してください。"""})
 
         response = client.messages.create(
-            model="claude-opus-4-5",
+            model="claude-3-haiku-20240307",
             max_tokens=4096,
             system="あなたは動画編集素材のタグ付けアシスタントです。サムネイル画像を見て、素材の内容を表すタグを推薦してください。既存タグのリストを優先して使い、適切なものがなければ新規タグを提案してください。必ずJSON形式のみで返答してください。",
             messages=[{"role": "user", "content": content}]
@@ -860,6 +952,9 @@ confidence は 0.0〜1.0。既存タグはis_new=false、新規提案はis_new=t
                 text = text[4:]
         try:
             parsed = json.loads(text)
+            for result in parsed.get("results", []):
+                for t in result.get("suggested_tags", []):
+                    t["name"] = clean_tag_name(t.get("name", ""))
             all_results.extend(parsed.get("results", []))
         except Exception:
             for f in batch:
@@ -938,6 +1033,93 @@ def api_import_confirm():
     conn.commit()
     conn.close()
     return jsonify({"ok": True, "project_id": project_id, "imported": imported})
+
+
+@app.route("/api/missing_files")
+def api_missing_files():
+    """filepathが存在しない（行方不明）動画の一覧を返す"""
+    conn = get_db()
+    videos = conn.execute("SELECT id, filename, filepath FROM videos").fetchall()
+    conn.close()
+    missing = [
+        {"id": v["id"], "filename": v["filename"], "filepath": v["filepath"]}
+        for v in videos if not os.path.exists(v["filepath"])
+    ]
+    return jsonify({"count": len(missing), "files": missing})
+
+
+@app.route("/api/remap_prefix", methods=["POST"])
+def api_remap_prefix():
+    """旧パスプレフィックスを新プレフィックスに一括置換する。
+    preview=true の場合は件数と変更例のみ返し、DBは更新しない。
+    """
+    data = request.get_json()
+    old_prefix = (data.get("old_prefix") or "").rstrip("/")
+    new_prefix = (data.get("new_prefix") or "").rstrip("/")
+    preview = data.get("preview", True)
+
+    if not old_prefix or not new_prefix:
+        return jsonify({"error": "old_prefix と new_prefix は必須です"}), 400
+    if old_prefix == new_prefix:
+        return jsonify({"error": "新旧パスが同じです"}), 400
+
+    conn = get_db()
+    targets = conn.execute(
+        "SELECT id, filepath, thumbnail FROM videos WHERE filepath LIKE ?",
+        (old_prefix + "%",)
+    ).fetchall()
+
+    if not targets:
+        conn.close()
+        return jsonify({"count": 0, "examples": []})
+
+    examples = []
+    for v in targets[:3]:
+        new_fp = new_prefix + v["filepath"][len(old_prefix):]
+        examples.append({"old": v["filepath"], "new": new_fp})
+
+    if preview:
+        conn.close()
+        return jsonify({"count": len(targets), "examples": examples})
+
+    # 実際の更新
+    updated = 0
+    for v in targets:
+        old_fp = v["filepath"]
+        new_fp = new_prefix + old_fp[len(old_prefix):]
+
+        old_hash = hashlib.sha1(old_fp.encode()).hexdigest()
+        new_hash = hashlib.sha1(new_fp.encode()).hexdigest()
+
+        # サムネイルリネーム
+        old_thumb = os.path.join(THUMBNAIL_DIR, old_hash + ".jpg")
+        new_thumb = os.path.join(THUMBNAIL_DIR, new_hash + ".jpg")
+        if os.path.exists(old_thumb) and not os.path.exists(new_thumb):
+            try:
+                os.rename(old_thumb, new_thumb)
+            except OSError:
+                pass
+
+        # 変換キャッシュリネーム
+        old_conv = os.path.join(CONVERTED_DIR, old_hash + ".mp4")
+        new_conv = os.path.join(CONVERTED_DIR, new_hash + ".mp4")
+        if os.path.exists(old_conv) and not os.path.exists(new_conv):
+            try:
+                os.rename(old_conv, new_conv)
+            except OSError:
+                pass
+
+        # DB更新: thumbnail が NULL のレコードは NULL を維持
+        new_thumbnail = (new_hash + ".jpg") if v["thumbnail"] else None
+        conn.execute(
+            "UPDATE videos SET filepath = ?, thumbnail = ? WHERE id = ?",
+            (new_fp, new_thumbnail, v["id"])
+        )
+        updated += 1
+
+    conn.commit()
+    conn.close()
+    return jsonify({"updated": updated})
 
 
 if __name__ == "__main__":
